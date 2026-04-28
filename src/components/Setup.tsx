@@ -10,11 +10,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString();
 
-interface Props { onComplete: (profile: UserProfile) => void; }
+interface Props {
+  onComplete: (profile: UserProfile) => void;
+  /** When true, renders Cancel button + "Edit Profile" labels instead of initial setup */
+  editMode?: boolean;
+  onCancel?: () => void;
+}
 const STORAGE_KEY = 'careermatch_profile';
 function loadSaved() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'); } catch { return {}; } }
 
-export default function Setup({ onComplete }: Props) {
+export default function Setup({ onComplete, editMode = false, onCancel }: Props) {
   const saved = loadSaved();
   const [name, setName]               = useState(saved.name ?? '');
   const [city, setCity]               = useState(saved.city ?? '');
@@ -133,10 +138,23 @@ export default function Setup({ onComplete }: Props) {
               style={{ background: 'linear-gradient(135deg,#eef2ff,#ede9fe)' }}>
               <BriefcaseIcon className="w-5 h-5 text-indigo-600" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-800">Build your profile</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Used to compute accurate engineering match scores via AI</p>
+            <div className="flex-1">
+              <h2 className="text-base font-bold text-slate-800">
+                {editMode ? 'Edit your profile' : 'Build your profile'}
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {editMode
+                  ? 'Update your details, skills, or upload a new resume'
+                  : 'Used to compute accurate engineering match scores via AI'}
+              </p>
             </div>
+            {editMode && onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="text-xs font-semibold text-slate-400 hover:text-slate-700 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-100"
+              >Cancel</button>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -233,7 +251,11 @@ export default function Setup({ onComplete }: Props) {
                 </div>
                 <div>
                   <p className={`text-sm font-medium ${resumeText ? 'text-emerald-700' : 'text-slate-600'}`}>
-                    {parsingResume ? 'Parsing resume…' : resumeText ? `✓ ${resumeName}` : 'Upload resume'}
+                    {parsingResume
+                      ? 'Parsing resume…'
+                      : resumeText
+                      ? `✓ ${resumeName || 'Resume on file'}`
+                      : 'Upload resume'}
                   </p>
                   <p className="text-xs text-slate-400">
                     {resumeText ? 'Boosts match accuracy significantly' : 'Drag & drop or click · Boosts match accuracy'}
@@ -243,7 +265,7 @@ export default function Setup({ onComplete }: Props) {
             </div>
 
             <button type="submit" className="btn-primary w-full py-3 text-sm mt-1">
-              <span>Find My Jobs</span>
+              <span>{editMode ? 'Save Changes' : 'Find My Jobs'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

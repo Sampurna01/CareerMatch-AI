@@ -8,13 +8,16 @@ import { interestScore } from '../utils/interestMatch';
 import { useJobAlerts } from '../hooks/useJobAlerts';
 import JobCard from './JobCard';
 import JobDetail from './JobDetail';
+import Setup from './Setup';
 
 interface Props {
   profile: UserProfile;
   onLogout: () => void;
+  onProfileUpdate?: (p: UserProfile) => void;
 }
 
-export default function JobBoard({ profile, onLogout }: Props) {
+export default function JobBoard({ profile, onLogout, onProfileUpdate }: Props) {
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [searchQ, setSearchQ] = useState('');
   const [fieldFilter, setFieldFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -214,16 +217,20 @@ export default function JobBoard({ profile, onLogout }: Props) {
 
         {/* Right side */}
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2 bg-white/8 rounded-xl px-3 py-1.5 border border-white/10">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
+          <button
+            onClick={() => setEditProfileOpen(true)}
+            className="hidden sm:flex items-center gap-2 bg-white/8 rounded-xl px-3 py-1.5 border border-white/10 hover:bg-white/15 hover:border-white/20 transition-all cursor-pointer group"
+            title="Edit profile, skills, and resume"
+          >
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 group-hover:shadow-lg group-hover:shadow-indigo-500/40 transition-shadow">
               {profile.name.slice(0,1).toUpperCase()}
             </div>
             <div className="text-xs">
               <span className="text-white/90 font-semibold">{profile.name}</span>
               <span className="text-white/40 mx-1">·</span>
-              <span className="text-white/50">{profile.field}</span>
+              <span className="text-white/50 group-hover:text-white/80 transition-colors">{profile.field}</span>
             </div>
-          </div>
+          </button>
           {/* Job alerts bell + email popover */}
           <div className="relative">
             <button
@@ -372,9 +379,24 @@ export default function JobBoard({ profile, onLogout }: Props) {
     </header>
   );
 
+  // Profile edit overlay — full-screen Setup form in edit mode
+  const EditProfileOverlay = editProfileOpen ? (
+    <div className="fixed inset-0 z-50 overflow-y-auto" style={{ animation: 'fade-in 0.2s ease-out' }}>
+      <Setup
+        editMode
+        onCancel={() => setEditProfileOpen(false)}
+        onComplete={(updated) => {
+          onProfileUpdate?.(updated);
+          setEditProfileOpen(false);
+        }}
+      />
+    </div>
+  ) : null;
+
   if (selectedJob) {
     return (
       <div className="min-h-screen bg-dot-grid">
+        {EditProfileOverlay}
         <AppHeader />
         <JobDetail
           job={selectedJob}
@@ -390,6 +412,7 @@ export default function JobBoard({ profile, onLogout }: Props) {
 
   return (
     <div className="min-h-screen bg-dot-grid">
+      {EditProfileOverlay}
       <AppHeader />
 
       {/* ── Hero banner ── */}

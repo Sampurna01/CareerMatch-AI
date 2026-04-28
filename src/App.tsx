@@ -37,5 +37,11 @@ export default function App() {
     return <Setup onComplete={handleSetupComplete} />;
   }
 
-  return <JobBoard profile={profile} onLogout={handleLogout} />;
+  return (
+    <JobBoard
+      profile={profile}
+      onLogout={handleLogout}
+      onProfileUpdate={setProfile}
+    />
+  );
 }
