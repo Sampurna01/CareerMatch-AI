@@ -15,12 +15,14 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm install && npm run build
+    # --include=dev forces installation of devDependencies (Vite, TypeScript)
+    # which are needed for the build step but not at runtime.
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
-      - key: NODE_ENV
-        value: production
+      # NODE_ENV is set by `npm start` itself, not here, otherwise it
+      # would suppress devDependencies during `npm install`.
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: GMAIL_USER
