@@ -1,0 +1,29 @@
+# Render.com one-click deploy — full-stack
+# https://render.com/docs/blueprint-spec
+#
+# Deploys CareerMatch AI as a single Node web service.
+# Express serves the built React app + the API on the same port.
+#
+# After connecting your repo to Render, add the secret env vars manually:
+#   ANTHROPIC_API_KEY (required)
+#   GMAIL_USER       (optional — for email alerts)
+#   GMAIL_APP_PASSWORD (optional)
+
+services:
+  - type: web
+    name: careermatch-ai
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false

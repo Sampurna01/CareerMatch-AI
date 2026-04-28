@@ -3,6 +3,8 @@ import cors from 'cors';
 import Anthropic from '@anthropic-ai/sdk';
 import nodemailer from 'nodemailer';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 // Load .env manually (works with all Node versions)
 try {
@@ -17,8 +19,11 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 const CACHE_FILE = new URL('jobs-live.json', import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DIST_DIR = path.join(__dirname, 'dist');
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || existsSync(DIST_DIR);
 const EMAILED_FILE = new URL('emailed-jobs.json', import.meta.url);
 
 // ─── Email transporter (Gmail SMTP via app password) ──────────────────────────
@@ -401,6 +406,18 @@ function escapeHtml(s = '') {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+// ─── Static frontend (production only) ───────────────────────────────────────
+// In production, Express serves the built React app from /dist.
+// In dev, Vite handles the frontend on port 5173.
+if (IS_PRODUCTION && existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+  // SPA fallback — any non-API route returns index.html
+  app.get(/^(?!\/api).*/, (_req, res) => {
+    res.sendFile(path.join(DIST_DIR, 'index.html'));
+  });
+  console.log(`[server] Serving production build from ${DIST_DIR}`);
 }
 
 app.listen(PORT, () => console.log(`API proxy running on http://localhost:${PORT}`));

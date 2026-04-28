@@ -1,6 +1,9 @@
 # CareerMatch AI
 
-AI-powered job board exclusively for engineers — finds, scores, and tailors your application to every match.
+> AI-powered job board exclusively for engineers — finds, scores, and tailors your application to every match.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg)](https://nodejs.org/)
 
 ## Features
 
@@ -21,40 +24,68 @@ AI-powered job board exclusively for engineers — finds, scores, and tailors yo
 - **Email:** Nodemailer + Gmail SMTP
 - **Maps:** Google Maps (embed) + OpenStreetMap (geocoding)
 
-## Getting Started
+## Local Development
 
 ```bash
-# Clone and install
-git clone https://github.com/<your-username>/careermatch-ai.git
-cd careermatch-ai
+git clone https://github.com/Sampurna01/CareerMatch-AI.git
+cd CareerMatch-AI
 npm install
-
-# Configure
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY (and optional Gmail creds)
-
-# Run
+# Edit .env and add your ANTHROPIC_API_KEY
 npm run dev
 ```
 
 Open http://localhost:5173.
 
-## Environment
+## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | ✅ | Claude API key from https://console.anthropic.com/ |
 | `GMAIL_USER` | optional | Your Gmail address (sender for alerts) |
 | `GMAIL_APP_PASSWORD` | optional | 16-char app password from https://myaccount.google.com/apppasswords |
+| `PORT` | optional | Defaults to 3001 in dev / platform-provided in prod |
+
+## Deploy
+
+### Option A — Render (one click, full-stack, free tier)
+
+1. Push to GitHub *(already done)*
+2. Go to **https://render.com/deploy**, paste your repo URL
+3. Render auto-detects `render.yaml` — click **Apply**
+4. In the Render dashboard, set the secret env vars:
+   - `ANTHROPIC_API_KEY`
+   - `GMAIL_USER` *(optional)*
+   - `GMAIL_APP_PASSWORD` *(optional)*
+5. Wait ~3 minutes for build → done
+
+The free tier sleeps after 15 min idle. First request after sleep takes ~30s to wake up.
+
+### Option B — Vercel (frontend) + Render (backend)
+
+If you want a faster frontend with no cold starts:
+1. Deploy the backend on Render as above
+2. In `vercel.json`, replace `YOUR-BACKEND.onrender.com` with your actual Render URL
+3. Push the change, then **https://vercel.com/new** → import your repo → Deploy
+
+### Option C — Anywhere with Node 18+
+
+```bash
+npm run build
+npm start
+```
+
+Visit `http://localhost:3001` (Express serves both the API and the built frontend).
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Starts both the frontend (Vite, port 5173) and backend (Express, port 3001) |
-| `npm run server` | Backend only |
-| `npm run build` | Production build |
-| `npm run preview` | Preview production build |
+| `npm run dev` | Frontend (Vite, 5173) + backend (Express, 3001) in parallel |
+| `npm run build` | Production build to `dist/` |
+| `npm start` | Production server (serves built frontend + API) |
+| `npm run server` | Backend only (dev mode) |
+| `npm run preview` | Preview the production build via Vite |
 
 ## Project Structure
 
@@ -66,8 +97,10 @@ src/
   utils/         interestMatch, distance (geocoding + haversine)
   data/          jobs.ts (175+ curated engineering jobs)
 server.mjs       Express API proxy + live job fetching + email
+render.yaml      Render deploy blueprint
+vercel.json      Vercel deploy config (frontend only)
 ```
 
 ## License
 
-MIT
+[MIT](LICENSE)
