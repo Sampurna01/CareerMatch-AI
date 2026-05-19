@@ -258,7 +258,7 @@ app.post('/api/analyze', async (req, res) => {
     const client = getClient();
     const { messages, max_tokens } = req.body;
     const response = await client.chat.completions.create({
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       messages,
       max_tokens: max_tokens || 1024,
     });
@@ -279,7 +279,7 @@ app.post('/api/interview', async (req, res) => {
     const client = getClient();
     const { messages, max_tokens } = req.body;
     const stream = await client.chat.completions.create({
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       messages,
       max_tokens: max_tokens || 1024,
       stream: true,
@@ -306,7 +306,7 @@ app.post('/api/tailor-resume', async (req, res) => {
     const client = getClient();
     const { messages, max_tokens } = req.body;
     const stream = await client.chat.completions.create({
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       messages,
       max_tokens: max_tokens || 1024,
       stream: true,
