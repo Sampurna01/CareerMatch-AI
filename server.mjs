@@ -315,6 +315,7 @@ app.post('/api/analyze', limiterLLM, async (req, res) => {
   try {
     // Validate input
     const body = analyzeSchema.parse(req.body);
+    console.log('[API] Analyze request received');
 
     const client = getClient();
     const response = await client.chat.completions.create({
