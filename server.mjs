@@ -1,23 +1,57 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import morgan from 'morgan';
 import OpenAI from 'openai';
 import nodemailer from 'nodemailer';
+import { z } from 'zod';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import dotenv from 'dotenv';
 
-// Load .env manually (works with all Node versions)
-try {
-  const env = readFileSync(new URL('.env', import.meta.url), 'utf8');
-  for (const line of env.split('\n')) {
-    const [key, ...rest] = line.split('=');
-    if (key && rest.length) process.env[key.trim()] = rest.join('=').trim();
+// Load .env
+dotenv.config();
+
+// Validate required environment variables
+const requiredEnvVars = ['GROQ_API_KEY'];
+for (const key of requiredEnvVars) {
+  if (!process.env[key]) {
+    console.error(`FATAL: Missing required env var: ${key}`);
+    process.exit(1);
   }
-} catch { /* no .env file */ }
+}
 
 const app = express();
-app.use(cors());
+
+// Security middleware
+app.use(helmet());
+app.use(morgan('combined'));
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['https://careermatch-ai-ur50.onrender.com', 'http://localhost:5173', 'http://localhost:3001'],
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
+}));
+
 app.use(express.json({ limit: '2mb' }));
+
+// Request timeout
+app.use((req, res, next) => {
+  req.setTimeout(30000);
+  next();
+});
+
+// Rate limiting
+const limiterGeneral = rateLimit({ windowMs: 60 * 1000, max: 100, message: 'Too many requests, please try again later.' });
+const limiterLLM = rateLimit({ windowMs: 60 * 1000, max: 10, message: 'LLM rate limit exceeded. Max 10 requests per minute.' });
+const limiterRefresh = rateLimit({ windowMs: 60 * 1000, max: 5, message: 'Job refresh rate limit exceeded. Max 5 per minute.' });
+const limiterGeocode = rateLimit({ windowMs: 60 * 1000, max: 20, message: 'Geocode rate limit exceeded.' });
+
+app.use(limiterGeneral);  // Apply to all routes by default
 
 const PORT = process.env.PORT || 3001;
 const CACHE_FILE = new URL('jobs-live.json', import.meta.url);
@@ -219,25 +253,47 @@ function getClient() {
   });
 }
 
+// ─── Validation Schemas ────────────────────────────────────────────────────────
+
+const analyzeSchema = z.object({
+  messages: z.array(z.object({ role: z.string(), content: z.string() })),
+  max_tokens: z.number().max(2000).optional()
+});
+
+const streamingSchema = z.object({
+  messages: z.array(z.object({ role: z.string(), content: z.string() })),
+  max_tokens: z.number().max(3000).optional()
+});
+
+const emailSchema = z.object({
+  to: z.string().email('Invalid email address')
+});
+
+const alertNotifySchema = z.object({
+  to: z.string().email('Invalid email address'),
+  jobs: z.array(z.any()).optional()
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 // Health check
 app.get('/api/health', (_req, res) => {
-  res.json({ ready: !!process.env.GROQ_API_KEY });
+  res.json({ ready: true });  // Don't leak whether API key is set
 });
 
 // Geocode city → { lat, lon }
-app.get('/api/geocode', async (req, res) => {
+app.get('/api/geocode', limiterGeocode, async (req, res) => {
   const q = req.query.q;
   if (!q) return res.status(400).json({ error: 'Missing query' });
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=us`;
-    const r = await fetch(url, { headers: { 'User-Agent': 'CareerMatchAI/1.0' } });
+    const r = await fetch(url, { headers: { 'User-Agent': 'CareerMatchAI/1.0' }, signal: AbortSignal.timeout(5000) });
     const data = await r.json();
     if (!data.length) return res.json(null);
     res.json({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) });
   } catch (e) {
-    res.status(500).json({ error: e?.message });
+    console.error('[API] Geocode error:', e?.message);
+    res.status(500).json({ error: 'Geocoding failed' });
   }
 });
 
@@ -247,42 +303,54 @@ app.get('/api/jobs/live', (_req, res) => {
 });
 
 // Force-refresh live jobs (handy for testing)
-app.post('/api/jobs/refresh', async (_req, res) => {
+app.post('/api/jobs/refresh', limiterRefresh, async (_req, res) => {
   await refreshLiveJobs();
   res.json({ count: liveJobsCache.length, lastFetched });
 });
 
 // Non-streaming: job match analysis
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', limiterLLM, async (req, res) => {
   try {
+    // Validate input
+    const body = analyzeSchema.parse(req.body);
+
     const client = getClient();
-    const { messages, max_tokens } = req.body;
     const response = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      messages,
-      max_tokens: max_tokens || 1024,
+      messages: body.messages,
+      max_tokens: body.max_tokens || 1024,
+      timeout: 15000, // 15 second timeout
     });
     res.json(response);
   } catch (e) {
-    console.error('[API] Analyze error:', e?.message, e?.error, e?.response?.data);
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid request format' });
+    }
+    console.error('[API] Analyze error:', e?.message);
     const status = e?.status ?? 500;
-    res.status(status).json({ error: e?.message ?? 'Server error' });
+    // Don't expose error details to client
+    res.status(status).json({ error: status === 401 ? 'Unauthorized' : 'Analysis failed' });
   }
 });
 
 // Streaming: interview prep via Server-Sent Events
-app.post('/api/interview', async (req, res) => {
+app.post('/api/interview', limiterLLM, async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setTimeout(60000);  // 60 second timeout for SSE
+
   try {
+    // Validate input
+    const body = streamingSchema.parse(req.body);
+
     const client = getClient();
-    const { messages, max_tokens } = req.body;
     const stream = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      messages,
-      max_tokens: max_tokens || 1024,
+      messages: body.messages,
+      max_tokens: body.max_tokens || 1024,
       stream: true,
+      timeout: 15000,
     });
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
@@ -291,25 +359,35 @@ app.post('/api/interview', async (req, res) => {
     }
     res.write('data: [DONE]\n\n');
   } catch (e) {
-    res.write(`data: ${JSON.stringify({ error: e?.message ?? 'Server error' })}\n\n`);
+    if (e instanceof z.ZodError) {
+      res.write(`data: ${JSON.stringify({ error: 'Invalid request format' })}\n\n`);
+    } else {
+      console.error('[API] Interview error:', e?.message);
+      res.write(`data: ${JSON.stringify({ error: 'Interview prep generation failed' })}\n\n`);
+    }
   } finally {
     res.end();
   }
 });
 
 // Streaming: tailor resume to a specific job description
-app.post('/api/tailor-resume', async (req, res) => {
+app.post('/api/tailor-resume', limiterLLM, async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setTimeout(60000);  // 60 second timeout for SSE
+
   try {
+    // Validate input
+    const body = streamingSchema.parse(req.body);
+
     const client = getClient();
-    const { messages, max_tokens } = req.body;
     const stream = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      messages,
-      max_tokens: max_tokens || 1024,
+      messages: body.messages,
+      max_tokens: body.max_tokens || 1024,
       stream: true,
+      timeout: 15000,
     });
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
@@ -318,7 +396,12 @@ app.post('/api/tailor-resume', async (req, res) => {
     }
     res.write('data: [DONE]\n\n');
   } catch (e) {
-    res.write(`data: ${JSON.stringify({ error: e?.message ?? 'Server error' })}\n\n`);
+    if (e instanceof z.ZodError) {
+      res.write(`data: ${JSON.stringify({ error: 'Invalid request format' })}\n\n`);
+    } else {
+      console.error('[API] Tailor-resume error:', e?.message);
+      res.write(`data: ${JSON.stringify({ error: 'Resume tailoring failed' })}\n\n`);
+    }
   } finally {
     res.end();
   }
@@ -330,20 +413,22 @@ app.post('/api/tailor-resume', async (req, res) => {
 app.get('/api/alerts/status', (_req, res) => {
   res.json({
     configured: !!getMailer(),
-    sender: process.env.GMAIL_USER || null,
+    // Don't leak Gmail user
   });
 });
 
 // Send a test email
-app.post('/api/alerts/test', async (req, res) => {
-  const { to } = req.body || {};
-  if (!to) return res.status(400).json({ error: 'Missing recipient email' });
-  const m = getMailer();
-  if (!m) return res.status(503).json({ error: 'Email not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env' });
+app.post('/api/alerts/test', limiterGeneral, async (req, res) => {
   try {
+    // Validate input
+    const body = emailSchema.parse(req.body || {});
+
+    const m = getMailer();
+    if (!m) return res.status(503).json({ error: 'Email not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env' });
+
     await m.sendMail({
       from: `"CareerMatch AI" <${process.env.GMAIL_USER}>`,
-      to,
+      to: body.to,
       subject: '✓ CareerMatch AI alerts are active',
       html: `
         <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:560px;margin:0 auto;padding:32px;color:#1e293b">
@@ -354,66 +439,77 @@ app.post('/api/alerts/test', async (req, res) => {
     });
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e?.message ?? 'Send failed' });
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+    console.error('[API] Send test email error:', e?.message);
+    res.status(500).json({ error: 'Send failed' });
   }
 });
 
 // Send job-match alert (called by frontend when high-interest matches detected)
-app.post('/api/alerts/notify', async (req, res) => {
-  const { to, jobs = [], profile = {} } = req.body || {};
-  if (!to) return res.status(400).json({ error: 'Missing recipient email' });
-  if (!Array.isArray(jobs) || jobs.length === 0) return res.json({ ok: true, sent: 0 });
-
-  const m = getMailer();
-  if (!m) return res.status(503).json({ error: 'Email not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env' });
-
-  // Filter out jobs we've already emailed about
-  const fresh = jobs.filter(j => j?.id && !emailedJobs.has(j.id));
-  if (fresh.length === 0) return res.json({ ok: true, sent: 0, skipped: jobs.length });
-
-  // Build HTML email
-  const jobCards = fresh.map(j => `
-    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:12px 0;background:#fff">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="background:#10b981;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px">${j.score ?? 'NEW'}% match</span>
-        <span style="font-size:11px;color:#64748b">${j.type || ''}</span>
-      </div>
-      <h3 style="margin:6px 0;font-size:17px;color:#0f172a">${escapeHtml(j.title)}</h3>
-      <p style="margin:2px 0;font-size:14px;color:#475569"><strong>${escapeHtml(j.company)}</strong> · ${escapeHtml(j.location)}</p>
-      ${j.salary ? `<p style="margin:2px 0;font-size:13px;color:#64748b">${escapeHtml(j.salary)}</p>` : ''}
-      <p style="margin:8px 0 12px;font-size:13px;color:#475569;line-height:1.5">${escapeHtml((j.description || '').slice(0, 200))}${(j.description || '').length > 200 ? '…' : ''}</p>
-      ${j.applyUrl ? `<a href="${j.applyUrl}" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;text-decoration:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600">Apply at ${escapeHtml(j.company)} →</a>` : ''}
-    </div>
-  `).join('');
-
-  const html = `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#f8fafc">
-      <h2 style="margin:0 0 8px;font-size:22px;background:linear-gradient(90deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent">CareerMatch AI</h2>
-      <p style="margin:0 0 20px;font-size:15px;color:#475569">
-        ${fresh.length === 1 ? "We found a new job that matches your interests:" : `We found <strong>${fresh.length} new jobs</strong> that match your interests${profile.field ? ` in ${escapeHtml(profile.field)}` : ''}:`}
-      </p>
-      ${jobCards}
-      <p style="margin-top:24px;font-size:12px;color:#94a3b8;text-align:center">
-        You're getting this because you enabled job alerts in CareerMatch AI.
-      </p>
-    </div>`;
-
-  const subject = fresh.length === 1
-    ? `✨ New match: ${fresh[0].title} at ${fresh[0].company}`
-    : `🎯 ${fresh.length} new engineering matches for you`;
-
+app.post('/api/alerts/notify', limiterGeneral, async (req, res) => {
   try {
+    // Validate input
+    const body = alertNotifySchema.parse(req.body || {});
+
+    if (!Array.isArray(body.jobs) || body.jobs.length === 0) {
+      return res.json({ ok: true, sent: 0 });
+    }
+
+    const m = getMailer();
+    if (!m) return res.status(503).json({ error: 'Email not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env' });
+
+    // Filter out jobs we've already emailed about
+    const fresh = body.jobs.filter(j => j?.id && !emailedJobs.has(j.id));
+    if (fresh.length === 0) return res.json({ ok: true, sent: 0, skipped: body.jobs.length });
+
+    // Build HTML email
+    const jobCards = fresh.map(j => `
+      <div style="border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:12px 0;background:#fff">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="background:#10b981;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px">${j.score ?? 'NEW'}% match</span>
+          <span style="font-size:11px;color:#64748b">${j.type || ''}</span>
+        </div>
+        <h3 style="margin:6px 0;font-size:17px;color:#0f172a">${escapeHtml(j.title)}</h3>
+        <p style="margin:2px 0;font-size:14px;color:#475569"><strong>${escapeHtml(j.company)}</strong> · ${escapeHtml(j.location)}</p>
+        ${j.salary ? `<p style="margin:2px 0;font-size:13px;color:#64748b">${escapeHtml(j.salary)}</p>` : ''}
+        <p style="margin:8px 0 12px;font-size:13px;color:#475569;line-height:1.5">${escapeHtml((j.description || '').slice(0, 200))}${(j.description || '').length > 200 ? '…' : ''}</p>
+        ${j.applyUrl ? `<a href="${j.applyUrl}" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;text-decoration:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600">Apply at ${escapeHtml(j.company)} →</a>` : ''}
+      </div>
+    `).join('');
+
+    const html = `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#f8fafc">
+        <h2 style="margin:0 0 8px;font-size:22px;background:linear-gradient(90deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent">CareerMatch AI</h2>
+        <p style="margin:0 0 20px;font-size:15px;color:#475569">
+          ${fresh.length === 1 ? "We found a new job that matches your interests:" : `We found <strong>${fresh.length} new jobs</strong> that match your interests:`}
+        </p>
+        ${jobCards}
+        <p style="margin-top:24px;font-size:12px;color:#94a3b8;text-align:center">
+          You're getting this because you enabled job alerts in CareerMatch AI.
+        </p>
+      </div>`;
+
+    const subject = fresh.length === 1
+      ? `✨ New match: ${fresh[0].title} at ${fresh[0].company}`
+      : `🎯 ${fresh.length} new engineering matches for you`;
+
     await m.sendMail({
       from: `"CareerMatch AI" <${process.env.GMAIL_USER}>`,
-      to,
+      to: body.to,
       subject,
       html,
     });
     fresh.forEach(j => emailedJobs.add(j.id));
     saveEmailed(emailedJobs);
-    res.json({ ok: true, sent: fresh.length, skipped: jobs.length - fresh.length });
+    res.json({ ok: true, sent: fresh.length, skipped: body.jobs.length - fresh.length });
   } catch (e) {
-    res.status(500).json({ error: e?.message ?? 'Send failed' });
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+    console.error('[API] Alerts notify error:', e?.message);
+    res.status(500).json({ error: 'Send failed' });
   }
 });
 
