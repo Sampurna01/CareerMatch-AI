@@ -5,7 +5,7 @@
 # Express serves the built React app + the API on the same port.
 #
 # After connecting your repo to Render, add the secret env vars manually:
-#   ANTHROPIC_API_KEY (required)
+#   GROQ_API_KEY (required) — Free tier LLM API from Groq
 #   GMAIL_USER       (optional — for email alerts)
 #   GMAIL_APP_PASSWORD (optional)
 
@@ -23,7 +23,7 @@ services:
     envVars:
       # NODE_ENV is set by `npm start` itself, not here, otherwise it
       # would suppress devDependencies during `npm install`.
-      - key: ANTHROPIC_API_KEY
+      - key: GROQ_API_KEY
         sync: false
       - key: GMAIL_USER
         sync: false
