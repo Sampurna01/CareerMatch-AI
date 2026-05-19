@@ -264,6 +264,7 @@ app.post('/api/analyze', async (req, res) => {
     });
     res.json(response);
   } catch (e) {
+    console.error('[API] Analyze error:', e?.message, e?.error, e?.response?.data);
     const status = e?.status ?? 500;
     res.status(status).json({ error: e?.message ?? 'Server error' });
   }
