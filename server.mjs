@@ -67,7 +67,7 @@ function daysSince(dateStr) {
 
 function normalizeType(t = '') {
   const s = t.toLowerCase();
-  if (s.includes('intern')) return 'Internship';
+  if (s.includes('intern') || s.includes('co-op') || s.includes('coop')) return 'Internship';
   if (s.includes('part')) return 'Part-time';
   if (s.includes('contract') || s.includes('freelance')) return 'Contract';
   return 'Full-time';
