@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
 import nodemailer from 'nodemailer';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -208,19 +208,19 @@ try {
 // Auto-refresh every 2 hours
 setInterval(refreshLiveJobs, 2 * 60 * 60 * 1000);
 
-// ─── Anthropic client ──────────────────────────────────────────────────────────
+// ─── Groq client ────────────────────────────────────────────────────────────────
 
 function getClient() {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('ANTHROPIC_API_KEY is not set on the server');
-  return new Anthropic({ apiKey: key });
+  const key = process.env.GROQ_API_KEY;
+  if (!key) throw new Error('GROQ_API_KEY is not set on the server');
+  return new Groq({ apiKey: key });
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 // Health check
 app.get('/api/health', (_req, res) => {
-  res.json({ ready: !!process.env.ANTHROPIC_API_KEY });
+  res.json({ ready: !!process.env.GROQ_API_KEY });
 });
 
 // Geocode city → { lat, lon }
@@ -253,8 +253,12 @@ app.post('/api/jobs/refresh', async (_req, res) => {
 app.post('/api/analyze', async (req, res) => {
   try {
     const client = getClient();
-    const { messages, model, max_tokens } = req.body;
-    const response = await client.messages.create({ model, max_tokens, messages });
+    const { messages, max_tokens } = req.body;
+    const response = await client.chat.completions.create({
+      model: 'mixtral-8x7b-32768',
+      messages,
+      max_tokens: max_tokens || 1024,
+    });
     res.json(response);
   } catch (e) {
     const status = e?.status ?? 500;
@@ -269,11 +273,16 @@ app.post('/api/interview', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   try {
     const client = getClient();
-    const { messages, model, max_tokens } = req.body;
-    const stream = client.messages.stream({ model, max_tokens, messages });
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
+    const { messages, max_tokens } = req.body;
+    const stream = await client.chat.completions.create({
+      model: 'mixtral-8x7b-32768',
+      messages,
+      max_tokens: max_tokens || 1024,
+      stream: true,
+    });
+    for await (const chunk of stream) {
+      if (chunk.choices[0]?.delta?.content) {
+        res.write(`data: ${JSON.stringify({ text: chunk.choices[0].delta.content })}\n\n`);
       }
     }
     res.write('data: [DONE]\n\n');
@@ -291,11 +300,16 @@ app.post('/api/tailor-resume', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   try {
     const client = getClient();
-    const { messages, model, max_tokens } = req.body;
-    const stream = client.messages.stream({ model, max_tokens, messages });
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
+    const { messages, max_tokens } = req.body;
+    const stream = await client.chat.completions.create({
+      model: 'mixtral-8x7b-32768',
+      messages,
+      max_tokens: max_tokens || 1024,
+      stream: true,
+    });
+    for await (const chunk of stream) {
+      if (chunk.choices[0]?.delta?.content) {
+        res.write(`data: ${JSON.stringify({ text: chunk.choices[0].delta.content })}\n\n`);
       }
     }
     res.write('data: [DONE]\n\n');
