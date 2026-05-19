@@ -25,8 +25,22 @@ for (const key of requiredEnvVars) {
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
+// Security middleware with custom CSP for external images and fonts
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc: ["'self'", "https:", "data:"],
+      connectSrc: ["'self'", "https://"],
+      frameSrc: ["'self'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"]
+    }
+  }
+}));
 app.use(morgan('combined'));
 
 // CORS configuration
