@@ -179,35 +179,87 @@ async function fetchRemotive() {
 }
 
 async function fetchArbeitnow() {
+  const all = [];
+  for (let page = 1; page <= 3; page++) {
+    try {
+      const r = await fetch(`https://www.arbeitnow.com/api/job-board-api?page=${page}`, {
+        headers: { 'User-Agent': 'CareerMatchAI/1.0' },
+        signal: AbortSignal.timeout(10_000),
+      });
+      const d = await r.json();
+      const jobs = (d.data || []).flatMap(j => {
+        const field = mapCategory((j.tags || []).join(' ') + ' ' + j.title);
+        if (!field) return []; // skip non-engineering
+        return [{
+          id: `arbeitnow-${j.slug}`,
+          title: j.title,
+          company: j.company_name,
+          location: j.location || 'Remote',
+          type: normalizeType((j.job_types || [])[0]),
+          field,
+          description: stripHtml(j.description).slice(0, 700),
+          requirements: (j.tags || []).filter(Boolean).slice(0, 10),
+          niceToHave: [],
+          salary: 'Competitive',
+          remote: !!j.remote,
+          postedDaysAgo: daysSince(j.created_at),
+          isLive: true,
+          applyUrl: j.url,
+          source: 'Arbeitnow',
+        }];
+      });
+      all.push(...jobs);
+      if (jobs.length === 0) break; // stop if no results on this page
+    } catch (e) {
+      console.warn(`[Jobs] Arbeitnow page ${page} failed:`, e.message);
+      break; // stop pagination on error
+    }
+  }
+  return all;
+}
+
+async function fetchRemoteOK() {
   try {
-    const r = await fetch('https://www.arbeitnow.com/api/job-board-api?page=1', {
+    const r = await fetch('https://remoteok.com/api', {
       headers: { 'User-Agent': 'CareerMatchAI/1.0' },
       signal: AbortSignal.timeout(10_000),
     });
     const d = await r.json();
-    return (d.data || []).flatMap(j => {
-      const field = mapCategory((j.tags || []).join(' ') + ' ' + j.title);
-      if (!field) return []; // skip non-engineering
+    return (d || []).flatMap(j => {
+      if (!j.id || j.id === 'api') return []; // skip metadata row
+
+      // Filter for engineering/tech jobs
+      const tagStr = Array.isArray(j.tags) ? j.tags.join(' ') : (j.tags || '');
+      const searchText = `${tagStr} ${j.position || ''} ${j.title || ''}`.toLowerCase();
+      if (!searchText.includes('engineer') && !searchText.includes('developer') && !searchText.includes('devops') &&
+          !searchText.includes('data') && !searchText.includes('backend') && !searchText.includes('frontend') &&
+          !searchText.includes('fullstack') && !searchText.includes('sys') && !searchText.includes('tech')) return [];
+
+      const field = mapCategory(searchText);
+      if (!field) return [];
+
+      const tagsList = Array.isArray(j.tags) ? j.tags : (typeof j.tags === 'string' ? j.tags.split(',') : []);
+
       return [{
-        id: `arbeitnow-${j.slug}`,
-        title: j.title,
-        company: j.company_name,
+        id: `remoteok-${j.id}`,
+        title: j.position || j.title || '',
+        company: j.company || '',
         location: j.location || 'Remote',
-        type: normalizeType((j.job_types || [])[0]),
+        type: 'Full-time',
         field,
-        description: stripHtml(j.description).slice(0, 700),
-        requirements: (j.tags || []).filter(Boolean).slice(0, 10),
+        description: stripHtml(j.description || j.content || '').slice(0, 700),
+        requirements: tagsList.filter(Boolean).slice(0, 10),
         niceToHave: [],
         salary: 'Competitive',
-        remote: !!j.remote,
-        postedDaysAgo: daysSince(j.created_at),
+        remote: true,
+        postedDaysAgo: daysSince(j.date_posted || j.published_at),
         isLive: true,
-        applyUrl: j.url,
-        source: 'Arbeitnow',
+        applyUrl: j.url || '',
+        source: 'RemoteOK',
       }];
     });
   } catch (e) {
-    console.warn('[Jobs] Arbeitnow failed:', e.message);
+    console.warn('[Jobs] RemoteOK failed:', e.message);
     return [];
   }
 }
@@ -219,11 +271,11 @@ let lastFetched = null;
 
 async function refreshLiveJobs() {
   console.log('[Jobs] Fetching live jobs from APIs…');
-  const [remotive, arbeitnow] = await Promise.all([fetchRemotive(), fetchArbeitnow()]);
+  const [remotive, arbeitnow, remoteok] = await Promise.all([fetchRemotive(), fetchArbeitnow(), fetchRemoteOK()]);
 
   // Deduplicate by id
   const seen = new Set();
-  const merged = [...remotive, ...arbeitnow].filter(j => {
+  const merged = [...remotive, ...arbeitnow, ...remoteok].filter(j => {
     if (seen.has(j.id)) return false;
     seen.add(j.id);
     return true;
@@ -232,7 +284,7 @@ async function refreshLiveJobs() {
   liveJobsCache = merged;
   lastFetched = new Date().toISOString();
 
-  console.log(`[Jobs] ✓ ${liveJobsCache.length} live jobs (${remotive.length} Remotive, ${arbeitnow.length} Arbeitnow)`);
+  console.log(`[Jobs] ✓ ${liveJobsCache.length} live jobs (${remotive.length} Remotive, ${arbeitnow.length} Arbeitnow, ${remoteok.length} RemoteOK)`);
 
   try {
     writeFileSync(CACHE_FILE, JSON.stringify({ jobs: liveJobsCache, lastFetched }, null, 2));
