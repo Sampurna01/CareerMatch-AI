@@ -158,81 +158,38 @@ export default function Setup({ onComplete, editMode = false, onCancel }: Props)
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name + City */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Full Name *</Label>
-                <input required value={name} onChange={e => setName(e.target.value)}
-                  placeholder="Jane Smith" className="input-field" />
-              </div>
-              <div>
-                <Label>City <span className="normal-case font-normal text-slate-400">(optional)</span></Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input value={city} onChange={e => setCity(e.target.value)}
-                    placeholder="St. Louis, MO" className="input-field pl-9" />
-                </div>
-              </div>
+            {/* 1. Full Name */}
+            <div>
+              <Label>👤 Full Name *</Label>
+              <input required value={name} onChange={e => setName(e.target.value)}
+                placeholder="Jane Smith" className="input-field" />
+              <p className="text-xs text-slate-400 mt-1">Used to personalize your results</p>
             </div>
 
-            {/* Field */}
+            {/* 2. City (Location) */}
             <div>
-              <Label>Field of Study / Work *</Label>
+              <Label>📍 City / Location <span className="normal-case font-normal text-slate-400">(optional)</span></Label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input value={city} onChange={e => setCity(e.target.value)}
+                  placeholder="St. Louis, MO" className="input-field pl-9" />
+              </div>
+              <p className="text-xs text-slate-400 mt-1">Helps us find local opportunities</p>
+            </div>
+
+            {/* 3. Field of Study / Work */}
+            <div>
+              <Label>💼 Field of Study / Work *</Label>
               <select required value={field} onChange={e => setField(e.target.value)} className="input-field">
                 <option value="">Select a field…</option>
                 {ALL_FIELDS.map(f => <option key={f} value={f}>{f}</option>)}
               </select>
+              <p className="text-xs text-slate-400 mt-1">Example: Software Engineering, Data Science, DevOps</p>
             </div>
 
-            {/* Skills */}
-            <div>
-              <Label>Key Skills <span className="normal-case font-normal text-slate-400">(comma-separated)</span></Label>
-              <input value={skillsRaw} onChange={e => setSkillsRaw(e.target.value)}
-                placeholder="Python, React, MATLAB, Circuit Design…" className="input-field" />
-            </div>
-
-            {/* Interests */}
-            <div>
-              <Label>Career Interests <span className="normal-case font-normal text-slate-400">(comma-separated)</span></Label>
-              <input value={interestsRaw} onChange={e => setInterestsRaw(e.target.value)}
-                placeholder="Embedded systems, AI/ML, renewable energy…" className="input-field" />
-            </div>
-
-            {/* Experience + Education */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Experience *</Label>
-                <select required value={experience} onChange={e => setExperience(e.target.value)} className="input-field">
-                  <option value="">Select…</option>
-                  <option value="Student / No experience">Student / None</option>
-                  <option value="Less than 1 year">{'< 1 year'}</option>
-                  <option value="1–2 years">1–2 years</option>
-                  <option value="2–4 years">2–4 years</option>
-                  <option value="4–7 years">4–7 years</option>
-                  <option value="7+ years">7+ years</option>
-                </select>
-              </div>
-              <div>
-                <Label>Education *</Label>
-                <select required value={education} onChange={e => setEducation(e.target.value)} className="input-field">
-                  <option value="">Select…</option>
-                  <option value="High School / GED">High School</option>
-                  <option value="Associate Degree">Associate</option>
-                  <option value="Bachelor's Degree (In Progress)">Bachelor's (In Progress)</option>
-                  <option value="Bachelor's Degree">Bachelor's Degree</option>
-                  <option value="Master's Degree (In Progress)">Master's (In Progress)</option>
-                  <option value="Master's Degree">Master's Degree</option>
-                  <option value="PhD (In Progress)">PhD (In Progress)</option>
-                  <option value="PhD">PhD</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Resume upload */}
-            <div>
-              <Label>
-                Resume <span className="normal-case font-normal text-slate-400">(optional · .pdf .docx .txt)</span>
-              </Label>
+            {/* 4. Resume Upload (MOVED UP) */}
+            <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-4 -mx-4 px-4">
+              <Label className="mb-3">📄 Resume <span className="normal-case font-normal text-indigo-600">(optional but recommended)</span></Label>
               <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all duration-200 ${
                 resumeText
                   ? 'border-emerald-300 bg-emerald-50/60 hover:bg-emerald-50'
@@ -249,19 +206,65 @@ export default function Setup({ onComplete, editMode = false, onCancel }: Props)
                     : <GraduationCap className="w-4 h-4 text-slate-400" />
                   }
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className={`text-sm font-medium ${resumeText ? 'text-emerald-700' : 'text-slate-600'}`}>
                     {parsingResume
                       ? 'Parsing resume…'
                       : resumeText
                       ? `✓ ${resumeName || 'Resume on file'}`
-                      : 'Upload resume'}
+                      : 'Upload your resume'}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {resumeText ? 'Boosts match accuracy significantly' : 'Drag & drop or click · Boosts match accuracy'}
+                    {resumeText ? 'We found your key skills & experience' : 'PDF, DOCX, or TXT · Boosts accuracy 3x'}
                   </p>
                 </div>
               </label>
+            </div>
+
+            {/* 5 & 6. Experience + Education */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>📊 Experience *</Label>
+                <select required value={experience} onChange={e => setExperience(e.target.value)} className="input-field">
+                  <option value="">Select…</option>
+                  <option value="Student / No experience">Student / None</option>
+                  <option value="Less than 1 year">{'< 1 year'}</option>
+                  <option value="1–2 years">1–2 years</option>
+                  <option value="2–4 years">2–4 years</option>
+                  <option value="4–7 years">4–7 years</option>
+                  <option value="7+ years">7+ years</option>
+                </select>
+              </div>
+              <div>
+                <Label>🎓 Education *</Label>
+                <select required value={education} onChange={e => setEducation(e.target.value)} className="input-field">
+                  <option value="">Select…</option>
+                  <option value="High School / GED">High School</option>
+                  <option value="Associate Degree">Associate</option>
+                  <option value="Bachelor's Degree (In Progress)">Bachelor's (In Progress)</option>
+                  <option value="Bachelor's Degree">Bachelor's Degree</option>
+                  <option value="Master's Degree (In Progress)">Master's (In Progress)</option>
+                  <option value="Master's Degree">Master's Degree</option>
+                  <option value="PhD (In Progress)">PhD (In Progress)</option>
+                  <option value="PhD">PhD</option>
+                </select>
+              </div>
+            </div>
+
+            {/* 7. Key Skills */}
+            <div>
+              <Label>🛠️ Key Skills <span className="normal-case font-normal text-slate-400">(comma-separated)</span></Label>
+              <input value={skillsRaw} onChange={e => setSkillsRaw(e.target.value)}
+                placeholder="Python, React, MATLAB, Circuit Design…" className="input-field" />
+              <p className="text-xs text-slate-400 mt-1">Technical skills you know well — helps us find better matches</p>
+            </div>
+
+            {/* 8. Career Interests */}
+            <div>
+              <Label>🎯 Career Interests <span className="normal-case font-normal text-slate-400">(comma-separated)</span></Label>
+              <input value={interestsRaw} onChange={e => setInterestsRaw(e.target.value)}
+                placeholder="AI/ML, Remote work, Startups, Embedded systems…" className="input-field" />
+              <p className="text-xs text-slate-400 mt-1">What excites you about your next role? Used to find cultural fit</p>
             </div>
 
             <button type="submit" className="btn-primary w-full py-3 text-sm mt-1">
