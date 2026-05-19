@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import Groq from 'groq-sdk';
+import OpenAI from 'openai';
 import nodemailer from 'nodemailer';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -208,12 +208,15 @@ try {
 // Auto-refresh every 2 hours
 setInterval(refreshLiveJobs, 2 * 60 * 60 * 1000);
 
-// ─── Groq client ────────────────────────────────────────────────────────────────
+// ─── Groq client (via OpenAI SDK) ────────────────────────────────────────────────
 
 function getClient() {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new Error('GROQ_API_KEY is not set on the server');
-  return new Groq({ apiKey: key });
+  return new OpenAI({
+    apiKey: key,
+    baseURL: 'https://api.groq.com/openai/v1',
+  });
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
