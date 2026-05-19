@@ -288,12 +288,14 @@ app.get('/api/geocode', limiterGeocode, async (req, res) => {
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=us`;
     const r = await fetch(url, { headers: { 'User-Agent': 'CareerMatchAI/1.0' }, signal: AbortSignal.timeout(5000) });
-    const data = await r.json();
-    if (!data.length) return res.json(null);
+    if (!r.ok) return res.json(null);
+    const text = await r.text();
+    const data = JSON.parse(text);
+    if (!Array.isArray(data) || !data.length) return res.json(null);
     res.json({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) });
   } catch (e) {
-    console.error('[API] Geocode error:', e?.message);
-    res.status(500).json({ error: 'Geocoding failed' });
+    // Nominatim errors are non-critical; return null
+    res.json(null);
   }
 });
 
@@ -319,7 +321,6 @@ app.post('/api/analyze', limiterLLM, async (req, res) => {
       model: 'llama-3.3-70b-versatile',
       messages: body.messages,
       max_tokens: body.max_tokens || 1024,
-      timeout: 15000, // 15 second timeout
     });
     res.json(response);
   } catch (e) {
@@ -350,7 +351,6 @@ app.post('/api/interview', limiterLLM, async (req, res) => {
       messages: body.messages,
       max_tokens: body.max_tokens || 1024,
       stream: true,
-      timeout: 15000,
     });
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
@@ -387,7 +387,6 @@ app.post('/api/tailor-resume', limiterLLM, async (req, res) => {
       messages: body.messages,
       max_tokens: body.max_tokens || 1024,
       stream: true,
-      timeout: 15000,
     });
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
