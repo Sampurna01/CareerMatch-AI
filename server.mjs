@@ -46,10 +46,10 @@ app.use((req, res, next) => {
 });
 
 // Rate limiting
-const limiterGeneral = rateLimit({ windowMs: 60 * 1000, max: 100, message: 'Too many requests, please try again later.' });
-const limiterLLM = rateLimit({ windowMs: 60 * 1000, max: 10, message: 'LLM rate limit exceeded. Max 10 requests per minute.' });
-const limiterRefresh = rateLimit({ windowMs: 60 * 1000, max: 5, message: 'Job refresh rate limit exceeded. Max 5 per minute.' });
-const limiterGeocode = rateLimit({ windowMs: 60 * 1000, max: 20, message: 'Geocode rate limit exceeded.' });
+const limiterGeneral = rateLimit({ windowMs: 60 * 1000, max: 1000, message: 'Too many requests, please try again later.' });
+const limiterLLM = rateLimit({ windowMs: 60 * 1000, max: 1000, message: 'Rate limit exceeded.' });
+const limiterRefresh = rateLimit({ windowMs: 60 * 1000, max: 1000, message: 'Rate limit exceeded.' });
+const limiterGeocode = rateLimit({ windowMs: 60 * 1000, max: 1000, message: 'Rate limit exceeded.' });
 
 app.use(limiterGeneral);  // Apply to all routes by default
 
