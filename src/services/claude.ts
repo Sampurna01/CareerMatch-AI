@@ -23,7 +23,7 @@ export async function analyzeMatch(profile: UserProfile, job: Job): Promise<Matc
     ? `\nRESUME / ADDITIONAL CONTEXT:\n${profile.resumeText.slice(0, 2500)}`
     : '';
 
-  const prompt = `You are a senior technical recruiter and career advisor with 15+ years of experience. Your task is to produce a highly accurate, calibrated match score between a candidate and a job posting.
+  const prompt = `You are a senior technical recruiter and career advisor with 15+ years of real-world hiring experience. Your task is to produce a realistic, market-calibrated match score between a candidate and a job posting—reflecting how actual hiring teams evaluate fit.
 
 ══════════════════════════════════════════════
 CANDIDATE PROFILE
@@ -47,65 +47,77 @@ REQUIRED Qualifications: ${job.requirements.join(' | ')}
 NICE-TO-HAVE Qualifications: ${job.niceToHave.join(' | ')}
 
 ══════════════════════════════════════════════
-SCORING INSTRUCTIONS — follow exactly
+SCORING INSTRUCTIONS — REALISTIC MARKET STANDARDS
 ══════════════════════════════════════════════
 
-Score each dimension 0-100 using the rubrics below. Then compute the overall score using the stated weights. Do NOT round to multiples of 5 — produce precise scores.
+CRITICAL: These scores must reflect actual hiring behavior, not best-case scenarios. Many candidates will score below 70.
 
-── DIMENSION 1: skillsMatch (weight 40%) ──
-Step 1 — Required skills audit: For each required qualification, classify the candidate as:
-  • MATCHED (exact or semantic equivalent, e.g. "React" matches "React.js"; "SQL" matches "database querying")
-  • PARTIAL (related but not the same, e.g. knowing Python partially covers "data analysis")
-  • MISSING (no evidence of this skill)
+── DIMENSION 1: skillsMatch (weight 45%) ──
+Assess required skills first — these are non-negotiable in real hiring:
 
-Step 2 — Score:
-  • Start at 100
-  • Each MISSING required skill: −20 points (cap: score cannot exceed 55 if ANY required skill is missing)
-  • Each PARTIAL required skill: −8 points
-  • Nice-to-have skills matched: +3 points each (max +15 bonus)
-  • Clamp final score to [0, 100]
+Step 1 — Identify CRITICAL required skills (core tech stack, key frameworks):
+  • MATCHED: candidate has this skill (exact match or proven equivalent)
+  • PARTIAL: candidate has related skill but not exact match
+  • MISSING: no evidence of this skill
 
-── DIMENSION 2: experienceMatch (weight 25%) ──
-Map experience levels to years: Student/No exp=0, <1yr=0.5, 1-2yrs=1.5, 2-4yrs=3, 4-7yrs=5.5, 7+yrs=9
-Determine what the job implicitly requires based on title + description (intern=0, junior=1, mid=3, senior=6, staff/principal=10).
-Score by gap:
-  • Exact or ±0.5yr match: 92-100
-  • 1yr under: 65-75 | 2yrs under: 40-55 | 3+yrs under: 15-35
-  • 1-3yrs over: 82-90 | 4-6yrs over: 65-78 (overqualification risk) | 7+yrs over: 40-60
+Step 2 — Score based on critical skills:
+  • Count the CRITICAL required skills (usually 3-5 per job)
+  • If 1+ critical skills MISSING: max score = 50 (this is a hard barrier in real hiring)
+  • If all critical skills matched: Start at 95
+  • Each PARTIAL critical skill: −15 points
+  • Non-critical MISSING required skills: −8 points each
+  • PARTIAL non-critical required: −4 points
+  • Each nice-to-have matched: +2 points (max +10 bonus)
+  • Clamp to [0, 100]
+
+── DIMENSION 2: experienceMatch (weight 30%) ──
+Map experience to years: Student/No exp=0, <1yr=0.5, 1-2yrs=1.5, 2-4yrs=3, 4-7yrs=5.5, 7+yrs=9
+Infer job requirement from title: intern=0, junior=1.5, mid=3.5, senior=6, staff=9
+
+REALISTIC scoring (hiring is strict on underexperience):
+  • Exact match (±0.5 years): 95-100
+  • 0.5-1 year under: 75-85
+  • 1-2 years under: 45-60 (noticeable gap, needs mentoring)
+  • 2+ years under: 15-40 (unlikely to succeed without significant support)
+  • 1-2 years over: 85-92 (slight overqualification, generally acceptable)
+  • 3-5 years over: 70-80 (overqualification concern — flight risk)
+  • 6+ years over: 35-55 (likely overqualified, won't stay long)
 
 ── DIMENSION 3: seniorityMatch (weight 15%) ──
-Assess whether the candidate's career stage fits the role's seniority level.
-  • Same level (e.g. student→internship, 2-4yr→mid-level): 90-100
-  • One level off: 65-80
-  • Two levels off: 35-55
-  • Three+ levels off: 10-30
+Does the candidate's career stage match the role?
+  • Perfect match (same level): 92-100
+  • One level below (e.g., junior applying for mid): 60-75 (risky, may struggle)
+  • One level above (e.g., mid applying for junior): 70-85 (overqualified)
+  • Two+ levels off: 15-40 (significant mismatch)
 
-── DIMENSION 4: educationMatch (weight 12%) ──
-Consider BOTH degree level AND field relevance.
-  • Required level + directly relevant field: 95-100
-  • Required level + related field: 75-88
-  • Required level + unrelated field: 55-70
-  • One level below required: 30-55 (treat as hard miss if job says "required")
-  • One level above required + relevant: 85-92
-  • Two levels below required: 10-28
-  • Field bonus: If the candidate's field is exactly the job's field, add +5
+── DIMENSION 4: educationMatch (weight 5%) ──
+Education matters less in tech if skills are strong; otherwise it's a barrier:
+  • Required degree + directly relevant field: 95-100
+  • Required degree + adjacent field: 80-90
+  • Required degree + unrelated field: 65-75
+  • No degree, but strong skills/portfolio: 75-85 (modern tech values ability over credentials)
+  • One level below required degree: 30-50 (if job explicitly requires, this is a barrier)
+  • Two+ levels below: 10-30
 
-── DIMENSION 5: interestsMatch (weight 8%) ──
-Do the candidate's stated career interests align with this job's domain, mission, and tasks?
-  • Strong alignment (2+ direct interest matches): 85-100
-  • Moderate alignment (1 match or related): 55-80
-  • Weak/no alignment: 15-45
+── DIMENSION 5: interestsMatch (weight 5%) ──
+Do stated career interests align with the job's domain and growth trajectory?
+  • Strong alignment (2+ interest matches): 90-100
+  • Moderate alignment (1 match or related area): 60-75
+  • Weak/no alignment: 20-45
+  • Strongly opposed interests (e.g., wants consulting, job is solo IC): 15-25
 
 ── OVERALL SCORE ──
-Compute: (skillsMatch×0.40) + (experienceMatch×0.25) + (seniorityMatch×0.15) + (educationMatch×0.12) + (interestsMatch×0.08)
-Round to nearest integer. This is the overallScore.
+Compute: (skillsMatch×0.45) + (experienceMatch×0.30) + (seniorityMatch×0.15) + (educationMatch×0.05) + (interestsMatch×0.05)
+Round to nearest integer.
 
-Interpretation benchmarks (for your calibration):
-  85-100: Exceptional fit — strong hire candidate
-  70-84: Good fit — worth interviewing
-  55-69: Partial fit — notable gaps but possible
-  40-54: Weak fit — significant gaps
-  Below 40: Poor fit — not ready for this role
+CALIBRATION BENCHMARKS (realistic distribution):
+  90-100: Exceptional fit — strong hire, advance immediately
+  75-89: Solid candidate — good fit, competitive pool
+  60-74: Viable but with gaps — needs to address specific weaknesses
+  45-59: Long shot — significant gaps, unlikely to advance past screening
+  Below 45: Not a fit — lacks critical qualifications
+
+IMPORTANT: Most candidates will score 50-70. Scores above 80 are relatively rare. Scores below 50 mean the candidate is unlikely to progress in real hiring.
 
 ══════════════════════════════════════════════
 OUTPUT FORMAT — respond with ONLY valid JSON, no markdown, no text outside JSON
