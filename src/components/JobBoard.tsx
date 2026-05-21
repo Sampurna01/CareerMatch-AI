@@ -23,7 +23,8 @@ export default function JobBoard({ profile, onLogout, onProfileUpdate }: Props) 
   const [typeFilter, setTypeFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [remoteOnly, setRemoteOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<'match' | 'distance' | 'interest'>('interest');
+  // Default to distance sort if user has a city, otherwise interest-based
+  const [sortBy, setSortBy] = useState<'match' | 'distance' | 'interest'>(profile.city ? 'distance' : 'interest');
   const [topMatchesOnly, setTopMatchesOnly] = useState(false);
   const [userCoords, setUserCoords] = useState<Coords | null>(null);
   const [jobCoords, setJobCoords] = useState<Record<string, Coords | null>>({});
@@ -514,12 +515,13 @@ export default function JobBoard({ profile, onLogout, onProfileUpdate }: Props) 
               disabled={geocoding}
               className={`text-sm px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition-all border ${
                 sortBy === 'distance'
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200/80'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
               }`}
+              title={sortBy === 'distance' ? 'Sorted by nearest jobs first' : 'Click to sort by nearest jobs'}
             >
               <Navigation2 className="w-3.5 h-3.5" />
-              {geocoding ? 'Locating…' : 'Nearest first'}
+              {geocoding ? 'Locating…' : sortBy === 'distance' ? 'Nearest first ✓' : 'Nearest first'}
             </button>
           )}
 
