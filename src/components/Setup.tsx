@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { UserProfile } from '../types';
 import { ALL_FIELDS } from '../data/jobs';
-import { Briefcase, MapPin, Zap, ArrowRight, Sparkles, GraduationCap, Briefcase as BriefcaseIcon } from 'lucide-react';
+import { MapPin, Zap, ArrowRight, Sparkles, GraduationCap, Briefcase as BriefcaseIcon } from 'lucide-react';
+import CareerMatchLogo from '../assets/careermatch-logo.svg';
 import * as mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -116,11 +117,8 @@ export default function Setup({ onComplete, editMode = false, onCancel }: Props)
       <div className="w-full max-w-lg relative z-10 animate-slide-up">
         {/* ── Hero ── */}
         <div className="text-center mb-7">
-          <div
-            className="inline-flex items-center justify-center w-[68px] h-[68px] rounded-2xl mb-4 shadow-2xl shadow-indigo-500/40"
-            style={{ background: 'linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%)' }}
-          >
-            <Briefcase className="w-8 h-8 text-white drop-shadow-sm" />
+          <div className="inline-flex items-center justify-center w-[68px] h-[68px] rounded-2xl mb-4 shadow-2xl shadow-indigo-500/40" style={{ background: 'linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%)' }}>
+            <img src={CareerMatchLogo} alt="CareerMatch AI" className="w-10 h-10 drop-shadow-sm" />
           </div>
           <h1 className="text-[2.2rem] font-black text-white tracking-tight leading-none">
             CareerMatch <span className="text-gradient">AI</span>
