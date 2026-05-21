@@ -418,13 +418,37 @@ app.post('/api/analyze', limiterLLM, async (req, res) => {
       return res.json(cached);
     }
 
-    const client = getClient();
-    const response = await client.chat.completions.create({
-      model: 'mixtral-8x7b-32768',  // Faster than llama-3.3-70b
-      messages: body.messages,
-      max_tokens: body.max_tokens || 1024,
-      temperature: 0.7,  // Lower temp = faster, more consistent
-    });
+    // Retry logic with exponential backoff for rate limit handling
+    let response;
+    let retries = 0;
+    const maxRetries = 3;
+
+    while (retries <= maxRetries) {
+      try {
+        const client = getClient();
+        response = await client.chat.completions.create({
+          model: 'mixtral-8x7b-32768',  // Faster than llama-3.3-70b
+          messages: body.messages,
+          max_tokens: body.max_tokens || 1024,
+          temperature: 0.7,  // Lower temp = faster, more consistent
+        });
+        break; // Success, exit retry loop
+      } catch (err) {
+        // Check if it's a rate limit error
+        if (err?.status === 429 || err?.message?.includes('rate') || err?.message?.includes('quota')) {
+          retries++;
+          if (retries <= maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, retries), 5000); // exponential backoff, max 5s
+            console.log(`[API] Rate limited, retrying in ${delay}ms (attempt ${retries}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            throw new Error('Rate limited - too many requests to Groq API. Please try again in a moment.');
+          }
+        } else {
+          throw err;
+        }
+      }
+    }
 
     // Cache the result
     setCachedMatch(jobId, profileHash, response);
@@ -436,8 +460,8 @@ app.post('/api/analyze', limiterLLM, async (req, res) => {
     }
     console.error('[API] Analyze error:', e?.message);
     const status = e?.status ?? 500;
-    // Don't expose error details to client
-    res.status(status).json({ error: status === 401 ? 'Unauthorized' : 'Analysis failed' });
+    const errorMsg = e?.message?.includes('rate') ? 'Too many requests - please wait a moment and try again' : 'Analysis failed';
+    res.status(status).json({ error: errorMsg });
   }
 });
 

@@ -165,12 +165,15 @@ export default function JobBoard({ profile, onLogout, onProfileUpdate }: Props) 
     } catch (e: any) {
       const status = e?.status;
       const errMsg: string = e?.message ?? '';
-      const isBilling = status === 402 || errMsg.toLowerCase().includes('credit') || errMsg.toLowerCase().includes('billing');
+      const errLower = errMsg.toLowerCase();
+      const isBilling = status === 402 || errLower.includes('credit') || errLower.includes('billing');
+      const isRateLimit = status === 429 || errLower.includes('rate') || errLower.includes('too many');
       const msg =
-        isBilling ? 'No API credits — add billing at console.anthropic.com' :
+        isBilling ? 'No API credits — add billing' :
         status === 401 ? 'Invalid API key' :
-        status === 429 ? 'Rate limited — wait a moment' :
+        isRateLimit ? 'Rate limited — wait a moment and retry' :
         (status >= 500) ? 'Server error — try again' :
+        errLower.includes('analysis') ? errMsg :
         'Analysis failed';
       setAnalyzeErrors((errs) => ({ ...errs, [job.id]: msg }));
     } finally {
@@ -182,6 +185,8 @@ export default function JobBoard({ profile, onLogout, onProfileUpdate }: Props) 
     const unscored = filtered.filter((j) => !matchScores[j.id] && !analyzingIds.has(j.id)).slice(0, 10);
     for (const job of unscored) {
       await handleAnalyze(job);
+      // Small delay between requests to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
 
