@@ -23,101 +23,25 @@ export async function analyzeMatch(profile: UserProfile, job: Job): Promise<Matc
     ? `\nRESUME / ADDITIONAL CONTEXT:\n${profile.resumeText.slice(0, 2500)}`
     : '';
 
-  const prompt = `You are a senior technical recruiter and career advisor with 15+ years of real-world hiring experience. Your task is to produce a STRICT, unforgiving match score between a candidate and a job posting—reflecting only candidates who are genuinely well-suited, not aspirational fits.
+  const prompt = `You are a strict technical recruiter. Produce a HARSH, unforgiving match score between this candidate and job—only candidates clearly ready should score above 70.
 
-══════════════════════════════════════════════
-CANDIDATE PROFILE
-══════════════════════════════════════════════
-Name: ${profile.name}
-Field of Study/Work: ${profile.field}
-Self-Reported Skills: ${profile.skills.length ? profile.skills.join(', ') : 'None listed'}
-Career Interests: ${profile.interests.length ? profile.interests.join(', ') : 'None listed'}
-Experience Level: ${profile.experience}
-Education: ${profile.education}${resumeSection}
+CANDIDATE: ${profile.name}
+Field: ${profile.field} | Skills: ${profile.skills.join(', ') || 'None'} | Interests: ${profile.interests.join(', ') || 'None'} | Exp: ${profile.experience} | Edu: ${profile.education}${resumeSection}
 
-══════════════════════════════════════════════
-JOB POSTING
-══════════════════════════════════════════════
-Title: ${job.title}
-Company: ${job.company}
-Job Type: ${job.type}
-Field/Industry: ${job.field}
+JOB: ${job.title} @ ${job.company} | Type: ${job.type} | Field: ${job.field}
 Description: ${job.description}
-REQUIRED Qualifications: ${job.requirements.join(' | ')}
-NICE-TO-HAVE Qualifications: ${job.niceToHave.join(' | ')}
+Required: ${job.requirements.join(' | ')} | Nice-to-have: ${job.niceToHave.join(' | ')}
 
-══════════════════════════════════════════════
-SCORING INSTRUCTIONS — HARSH & UNFORGIVING STANDARDS
-══════════════════════════════════════════════
+SCORING (HARSH STANDARDS):
+1. skillsMatch (45%): Missing 1+ critical skills=max 35; all matched=start 85; each partial=-20; non-critical missing=-10; nice-to-have=+1 each
+2. experienceMatch (30%): Exact match=95-100; 0.5-1yr under=60-75; 1-2yr under=25-45; 2+yr under=5-30; 1-2yr over=80-88; 3-5yr over=60-70; 6+yr over=25-45
+3. seniorityMatch (15%): Perfect=92-100; 1 level below=50-65; 1 level above=65-75; 2+levels off=5-25
+4. educationMatch (5%): Degree+relevant=95-100; degree+adjacent=75-85; no degree+skills=70-80; 1 level below=20-40; 2+below=5-20
+5. interestsMatch (5%): 2+ matches=90-100; 1 match=50-70; weak=15-35; opposed=5-15
 
-CRITICAL: Be EXTREMELY strict. Only candidates who are clearly, demonstrably ready should score above 70. This is not realistic hiring—this is ideal-candidate hiring.
+Formula: (skills×0.45) + (exp×0.30) + (senior×0.15) + (edu×0.05) + (interests×0.05)
 
-── DIMENSION 1: skillsMatch (weight 45%) ──
-Assess required skills ruthlessly — missing even one critical skill is nearly disqualifying:
-
-Step 1 — Identify CRITICAL required skills (core tech stack, key frameworks):
-  • MATCHED: candidate has this skill (exact match or proven equivalent)
-  • PARTIAL: candidate has related skill but not exact match
-  • MISSING: no evidence of this skill
-
-Step 2 — Score based on critical skills with HARSH penalties:
-  • Count the CRITICAL required skills (usually 3-5 per job)
-  • If 1+ critical skills MISSING: max score = 35 (nearly disqualifying — very hard barrier)
-  • If all critical skills matched: Start at 85 (not 95)
-  • Each PARTIAL critical skill: −20 points (harsher than −15)
-  • Non-critical MISSING required skills: −10 points each (harsher than −8)
-  • PARTIAL non-critical required: −6 points (harsher than −4)
-  • Each nice-to-have matched: +1 point (max +5 bonus — less forgiving)
-  • Clamp to [0, 100]
-
-── DIMENSION 2: experienceMatch (weight 30%) ──
-Map experience to years: Student/No exp=0, <1yr=0.5, 1-2yrs=1.5, 2-4yrs=3, 4-7yrs=5.5, 7+yrs=9
-Infer job requirement from title: intern=0, junior=1.5, mid=3.5, senior=6, staff=9
-
-HARSH scoring (underexperience is nearly disqualifying):
-  • Exact match (±0.5 years): 95-100
-  • 0.5-1 year under: 60-75 (much riskier than before)
-  • 1-2 years under: 25-45 (very likely to fail without intensive support)
-  • 2+ years under: 5-30 (nearly impossible fit)
-  • 1-2 years over: 80-88 (slight overqualification)
-  • 3-5 years over: 60-70 (clear overqualification concern — will leave quickly)
-  • 6+ years over: 25-45 (extremely unlikely to stay, almost disqualifying)
-
-── DIMENSION 3: seniorityMatch (weight 15%) ──
-Does the candidate's career stage match the role? Be very strict.
-  • Perfect match (same level): 92-100
-  • One level below (e.g., junior applying for mid): 50-65 (risky, likely to struggle significantly)
-  • One level above (e.g., mid applying for junior): 65-75 (overqualified, flight risk)
-  • Two+ levels off: 5-25 (severe mismatch, almost never a fit)
-
-── DIMENSION 4: educationMatch (weight 5%) ──
-Education is a barrier if the job requires it; modern tech is still somewhat forgiving:
-  • Required degree + directly relevant field: 95-100
-  • Required degree + adjacent field: 75-85 (slightly harsher)
-  • Required degree + unrelated field: 55-70 (harsher)
-  • No degree, but strong skills/portfolio: 70-80 (harder without proof)
-  • One level below required degree: 20-40 (much harsher barrier if required)
-  • Two+ levels below: 5-20
-
-── DIMENSION 5: interestsMatch (weight 5%) ──
-Do stated career interests align with the job's domain and growth trajectory?
-  • Strong alignment (2+ interest matches): 90-100
-  • Moderate alignment (1 match or related area): 50-70 (less forgiving than before)
-  • Weak/no alignment: 15-35 (very harsh)
-  • Strongly opposed interests: 5-15 (nearly disqualifying)
-
-── OVERALL SCORE ──
-Compute: (skillsMatch×0.45) + (experienceMatch×0.30) + (seniorityMatch×0.15) + (educationMatch×0.05) + (interestsMatch×0.05)
-Round to nearest integer.
-
-CALIBRATION BENCHMARKS (harsh distribution — most will be much lower):
-  85-100: Exceptional fit — genuinely rare, nearly perfect candidate
-  70-84: Strong candidate — clearly ready, competitive
-  55-69: Moderate fit — has gaps but could work with effort
-  40-54: Long shot — significant misalignment, unlikely
-  Below 40: Poor fit — wrong profile for this role
-
-IMPORTANT: Most candidates will score 35-55. Scores above 80 are VERY rare. Scores below 50 are common. Only score above 70 for candidates who are demonstrably, clearly ready.
+Most score 35-55. Scores 85+ are rare. Below 50 is common.
 
 ══════════════════════════════════════════════
 OUTPUT FORMAT — respond with ONLY valid JSON, no markdown, no text outside JSON

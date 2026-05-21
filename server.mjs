@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 
 // Load .env
 dotenv.config();
@@ -100,6 +101,29 @@ function saveEmailed(set) {
   } catch { /* ignore */ }
 }
 const emailedJobs = loadEmailed();
+
+// ─── In-memory cache for match results (job + profile hash → result) ──────────
+const matchCache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+function getCacheKey(jobId, profileHash) {
+  return `${jobId}:${profileHash}`;
+}
+
+function getCachedMatch(jobId, profileHash) {
+  const key = getCacheKey(jobId, profileHash);
+  const cached = matchCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.result;
+  }
+  matchCache.delete(key); // expired
+  return null;
+}
+
+function setCachedMatch(jobId, profileHash, result) {
+  const key = getCacheKey(jobId, profileHash);
+  matchCache.set(key, { result, timestamp: Date.now() });
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -383,12 +407,28 @@ app.post('/api/analyze', limiterLLM, async (req, res) => {
     const body = analyzeSchema.parse(req.body);
     console.log('[API] Analyze request received');
 
+    // Check cache first (profile + job ID hash)
+    const jobIdMatch = body.messages[0]?.content?.match(/^Title: (.+)\n/m);
+    const jobId = jobIdMatch ? jobIdMatch[1].slice(0, 50) : '';
+    const profileHash = crypto.createHash('md5').update(JSON.stringify(body.messages)).digest('hex').slice(0, 16);
+
+    const cached = getCachedMatch(jobId, profileHash);
+    if (cached) {
+      console.log('[Cache] Match hit for', jobId);
+      return res.json(cached);
+    }
+
     const client = getClient();
     const response = await client.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'mixtral-8x7b-32768',  // Faster than llama-3.3-70b
       messages: body.messages,
       max_tokens: body.max_tokens || 1024,
+      temperature: 0.7,  // Lower temp = faster, more consistent
     });
+
+    // Cache the result
+    setCachedMatch(jobId, profileHash, response);
+
     res.json(response);
   } catch (e) {
     if (e instanceof z.ZodError) {
@@ -414,7 +454,7 @@ app.post('/api/interview', limiterLLM, async (req, res) => {
 
     const client = getClient();
     const stream = await client.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'mixtral-8x7b-32768',  // Faster model
       messages: body.messages,
       max_tokens: body.max_tokens || 1024,
       stream: true,
@@ -450,7 +490,7 @@ app.post('/api/tailor-resume', limiterLLM, async (req, res) => {
 
     const client = getClient();
     const stream = await client.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'mixtral-8x7b-32768',  // Faster model
       messages: body.messages,
       max_tokens: body.max_tokens || 1024,
       stream: true,
