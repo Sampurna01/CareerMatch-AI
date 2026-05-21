@@ -273,6 +273,12 @@ export default function JobCard({ job, match, analyzing, analyzeError, userCity,
               <Wifi className="w-2.5 h-2.5" /> Remote
             </span>
           )}
+          {job.postedDaysAgo < 3 && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-rose-100 text-rose-700 ring-1 ring-rose-200/80 flex items-center gap-1 animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              New
+            </span>
+          )}
           {job.isLive && (
             <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
