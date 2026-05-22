@@ -23,9 +23,10 @@ export default function MapModal({ job, userCity, distanceMiles, onClose }: Prop
   }, [onClose]);
 
   // Build the embed URL — Google Maps directions if we have a user city, else just the job location
+  // Use proper iframe-compatible URLs without output=embed (Google handles iframes automatically)
   const embedUrl = userCity && !job.remote
-    ? `https://maps.google.com/maps?saddr=${encodeURIComponent(userCity)}&daddr=${encodeURIComponent(job.location)}&output=embed`
-    : `https://maps.google.com/maps?q=${encodeURIComponent(job.location)}&output=embed&z=11`;
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(userCity)}&destination=${encodeURIComponent(job.location)}`
+    : `https://www.google.com/maps/search/${encodeURIComponent(job.location)}`;
 
   // External "open in Google Maps" link
   const openExternal = userCity && !job.remote

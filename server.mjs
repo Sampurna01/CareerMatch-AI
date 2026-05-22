@@ -36,7 +36,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "https:", "data:"],
       connectSrc: ["'self'", "https://"],
-      frameSrc: ["'self'", "https://maps.google.com", "https://*.google.com"],
+      frameSrc: ["'self'", "https://www.google.com", "https://maps.google.com"],
       baseUri: ["'self'"],
       formAction: ["'self'"]
     }
