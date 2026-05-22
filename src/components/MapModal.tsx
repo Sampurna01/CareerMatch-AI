@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { X, MapPin, Navigation, ExternalLink, Wifi } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, MapPin, Navigation, ExternalLink, Wifi, AlertCircle } from 'lucide-react';
 import { Job } from '../types';
 import { formatDistance } from '../utils/distance';
 
@@ -11,6 +11,8 @@ interface Props {
 }
 
 export default function MapModal({ job, userCity, distanceMiles, onClose }: Props) {
+  const [mapFailed, setMapFailed] = useState(false);
+
   // Close on Escape key
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -92,6 +94,29 @@ export default function MapModal({ job, userCity, distanceMiles, onClose }: Prop
                 This role can be done from anywhere — no commute, no geographic constraints.
               </p>
             </div>
+          ) : mapFailed ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mb-4">
+                <AlertCircle className="w-8 h-8 text-white" />
+              </div>
+              <h4 className="font-bold text-slate-800 text-lg mb-2">Map unavailable</h4>
+              {userCity && distanceMiles != null && !isNaN(distanceMiles) ? (
+                <div className="mb-4">
+                  <p className="text-3xl font-bold text-indigo-600 mb-1">
+                    {formatDistance(distanceMiles)}
+                  </p>
+                  <p className="text-sm text-slate-600 mb-2">
+                    from {userCity}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    ~{Math.round(distanceMiles / 55 * 60)} minutes drive
+                  </p>
+                </div>
+              ) : null}
+              <p className="text-sm text-slate-500 max-w-sm">
+                Open in Google Maps to see the full route
+              </p>
+            </div>
           ) : (
             <iframe
               src={embedUrl}
@@ -102,6 +127,8 @@ export default function MapModal({ job, userCity, distanceMiles, onClose }: Prop
               referrerPolicy="no-referrer-when-downgrade"
               title={`Map to ${job.location}`}
               className="w-full h-full"
+              onError={() => setMapFailed(true)}
+              sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
             />
           )}
         </div>
