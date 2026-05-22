@@ -26,7 +26,7 @@ for (const key of requiredEnvVars) {
 
 const app = express();
 
-// Security middleware with custom CSP for external images and fonts
+// Security middleware with custom CSP for external images, fonts, and maps
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -36,7 +36,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "https:", "data:"],
       connectSrc: ["'self'", "https://"],
-      frameSrc: ["'self'"],
+      frameSrc: ["'self'", "https://maps.google.com", "https://*.google.com"],
       baseUri: ["'self'"],
       formAction: ["'self'"]
     }
