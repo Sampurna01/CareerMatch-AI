@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, MapPin, Navigation, ExternalLink, Wifi, AlertCircle } from 'lucide-react';
+import { X, MapPin, Navigation, ExternalLink, Wifi } from 'lucide-react';
 import { Job } from '../types';
 import { formatDistance } from '../utils/distance';
 
@@ -11,8 +11,6 @@ interface Props {
 }
 
 export default function MapModal({ job, userCity, distanceMiles, onClose }: Props) {
-  const [mapFailed, setMapFailed] = useState(false);
-
   // Close on Escape key
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -23,12 +21,6 @@ export default function MapModal({ job, userCity, distanceMiles, onClose }: Prop
       document.body.style.overflow = '';
     };
   }, [onClose]);
-
-  // Build the embed URL — Google Maps directions if we have a user city, else just the job location
-  // Use proper iframe-compatible URLs without output=embed (Google handles iframes automatically)
-  const embedUrl = userCity && !job.remote
-    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(userCity)}&destination=${encodeURIComponent(job.location)}`
-    : `https://www.google.com/maps/search/${encodeURIComponent(job.location)}`;
 
   // External "open in Google Maps" link
   const openExternal = userCity && !job.remote
@@ -82,8 +74,8 @@ export default function MapModal({ job, userCity, distanceMiles, onClose }: Prop
           </button>
         </div>
 
-        {/* Map */}
-        <div className="flex-1 relative bg-slate-50" style={{ minHeight: 380 }}>
+        {/* Distance Display */}
+        <div className="flex-1 relative bg-gradient-to-br from-slate-50 to-slate-100" style={{ minHeight: 380 }}>
           {job.remote ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center mb-4">
@@ -94,42 +86,30 @@ export default function MapModal({ job, userCity, distanceMiles, onClose }: Prop
                 This role can be done from anywhere — no commute, no geographic constraints.
               </p>
             </div>
-          ) : mapFailed ? (
+          ) : userCity && distanceMiles != null && !isNaN(distanceMiles) ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mb-4">
-                <AlertCircle className="w-8 h-8 text-white" />
+              <div className="flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-400 to-violet-500 mb-6">
+                <Navigation className="w-10 h-10 text-white" />
               </div>
-              <h4 className="font-bold text-slate-800 text-lg mb-2">Map unavailable</h4>
-              {userCity && distanceMiles != null && !isNaN(distanceMiles) ? (
-                <div className="mb-4">
-                  <p className="text-3xl font-bold text-indigo-600 mb-1">
-                    {formatDistance(distanceMiles)}
-                  </p>
-                  <p className="text-sm text-slate-600 mb-2">
-                    from {userCity}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    ~{Math.round(distanceMiles / 55 * 60)} minutes drive
-                  </p>
-                </div>
-              ) : null}
-              <p className="text-sm text-slate-500 max-w-sm">
-                Open in Google Maps to see the full route
+              <p className="text-sm text-slate-500 mb-2 font-medium">Distance from {userCity}</p>
+              <p className="text-5xl font-black text-indigo-600 mb-2">
+                {formatDistance(distanceMiles)}
+              </p>
+              <p className="text-base text-slate-600 mb-1">
+                ~{Math.round(distanceMiles / 55 * 60)} minutes drive
+              </p>
+              <p className="text-xs text-slate-400 max-w-sm mt-4">
+                Click "Open in Google Maps" below to see the full interactive route and directions
               </p>
             </div>
           ) : (
-            <iframe
-              src={embedUrl}
-              width="100%"
-              height="100%"
-              style={{ border: 0, minHeight: 380 }}
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              title={`Map to ${job.location}`}
-              className="w-full h-full"
-              onError={() => setMapFailed(true)}
-              sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
-            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8">
+              <MapPin className="w-12 h-12 text-slate-300 mb-3" />
+              <h4 className="font-bold text-slate-700 text-lg mb-1">{job.location}</h4>
+              <p className="text-sm text-slate-500">
+                Click "Open in Google Maps" to view the full route
+              </p>
+            </div>
           )}
         </div>
 
