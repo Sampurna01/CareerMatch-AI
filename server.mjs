@@ -288,6 +288,82 @@ async function fetchRemoteOK() {
   }
 }
 
+async function fetchJustJoinIT() {
+  try {
+    const r = await fetch('https://api.justjoin.it/v2/posts?experience_level=junior,mid,senior&remote=true&limit=100', {
+      headers: { 'User-Agent': 'CareerMatchAI/1.0' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const d = await r.json();
+    return (d.data || []).flatMap(j => {
+      const searchText = `${j.title || ''} ${(j.skills || []).map(s => s.name).join(' ')}`.toLowerCase();
+      if (!searchText.includes('engineer') && !searchText.includes('developer') && !searchText.includes('devops') &&
+          !searchText.includes('data') && !searchText.includes('tech') && !searchText.includes('python') &&
+          !searchText.includes('java') && !searchText.includes('javascript')) return [];
+
+      const field = mapCategory(searchText);
+      if (!field) return [];
+
+      return [{
+        id: `justjoinit-${j.id}`,
+        title: j.title || '',
+        company: j.company_name || '',
+        location: j.city?.name || 'Remote',
+        type: 'Full-time',
+        field,
+        description: j.description || j.title,
+        requirements: (j.skills || []).slice(0, 10).map(s => s.name),
+        niceToHave: [],
+        salary: j.salary_from ? `$${j.salary_from.toLocaleString()}-$${j.salary_to?.toLocaleString() || 'Competitive'}` : 'Competitive',
+        remote: true,
+        postedDaysAgo: daysSince(j.published_at),
+        isLive: true,
+        applyUrl: j.url || '',
+        source: 'JustJoinIT',
+      }];
+    });
+  } catch (e) {
+    console.warn('[Jobs] JustJoinIT failed:', e.message);
+    return [];
+  }
+}
+
+async function fetchWeWorkRemotely() {
+  try {
+    const r = await fetch('https://weworkremotely.com/api/v3/posts?category=software-dev&remote=true', {
+      headers: { 'User-Agent': 'CareerMatchAI/1.0' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const d = await r.json();
+    return (d || []).flatMap(j => {
+      const searchText = `${j.title || ''} ${j.description || ''}`.toLowerCase();
+      const field = mapCategory(searchText);
+      if (!field) return [];
+
+      return [{
+        id: `weworkremotely-${j.id}`,
+        title: j.title || '',
+        company: j.company_name || '',
+        location: j.location || 'Remote',
+        type: normalizeType(j.job_type || ''),
+        field,
+        description: stripHtml(j.description || '').slice(0, 700),
+        requirements: (j.keywords || []).slice(0, 10),
+        niceToHave: [],
+        salary: j.salary || 'Competitive',
+        remote: true,
+        postedDaysAgo: daysSince(j.published_at),
+        isLive: true,
+        applyUrl: j.url || '',
+        source: 'We Work Remotely',
+      }];
+    });
+  } catch (e) {
+    console.warn('[Jobs] We Work Remotely failed:', e.message);
+    return [];
+  }
+}
+
 // ─── Cache & Auto-refresh ──────────────────────────────────────────────────────
 
 let liveJobsCache = [];
@@ -295,11 +371,17 @@ let lastFetched = null;
 
 async function refreshLiveJobs() {
   console.log('[Jobs] Fetching live jobs from APIs…');
-  const [remotive, arbeitnow, remoteok] = await Promise.all([fetchRemotive(), fetchArbeitnow(), fetchRemoteOK()]);
+  const [remotive, arbeitnow, remoteok, justjoinit, weworkremotely] = await Promise.all([
+    fetchRemotive(),
+    fetchArbeitnow(),
+    fetchRemoteOK(),
+    fetchJustJoinIT(),
+    fetchWeWorkRemotely()
+  ]);
 
   // Deduplicate by id
   const seen = new Set();
-  const merged = [...remotive, ...arbeitnow, ...remoteok].filter(j => {
+  const merged = [...remotive, ...arbeitnow, ...remoteok, ...justjoinit, ...weworkremotely].filter(j => {
     if (seen.has(j.id)) return false;
     seen.add(j.id);
     return true;
@@ -308,7 +390,7 @@ async function refreshLiveJobs() {
   liveJobsCache = merged;
   lastFetched = new Date().toISOString();
 
-  console.log(`[Jobs] ✓ ${liveJobsCache.length} live jobs (${remotive.length} Remotive, ${arbeitnow.length} Arbeitnow, ${remoteok.length} RemoteOK)`);
+  console.log(`[Jobs] ✓ ${liveJobsCache.length} live jobs (${remotive.length} Remotive, ${arbeitnow.length} Arbeitnow, ${remoteok.length} RemoteOK, ${justjoinit.length} JustJoinIT, ${weworkremotely.length} WeWorkRemotely)`);
 
   try {
     writeFileSync(CACHE_FILE, JSON.stringify({ jobs: liveJobsCache, lastFetched }, null, 2));
