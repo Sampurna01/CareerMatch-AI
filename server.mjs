@@ -193,7 +193,7 @@ async function fetchRemotive() {
   const all = [];
   for (const cat of categories) {
     try {
-      const r = await fetch(`https://remotive.com/api/remote-jobs?category=${cat}&limit=40`, {
+      const r = await fetch(`https://remotive.com/api/remote-jobs?category=${cat}&limit=100`, {
         headers: { 'User-Agent': 'CareerMatchAI/1.0' },
         signal: AbortSignal.timeout(10_000),
       });
@@ -228,7 +228,7 @@ async function fetchRemotive() {
 
 async function fetchArbeitnow() {
   const all = [];
-  for (let page = 1; page <= 3; page++) {
+  for (let page = 1; page <= 5; page++) {
     try {
       const r = await fetch(`https://www.arbeitnow.com/api/job-board-api?page=${page}`, {
         headers: { 'User-Agent': 'CareerMatchAI/1.0' },
@@ -388,24 +388,144 @@ async function fetchWeWorkRemotely() {
   }
 }
 
+async function fetchGitHubJobs() {
+  try {
+    // GitHub Jobs is archived but API still returns data
+    const r = await fetch('https://jobs.github.com/positions.json?remote=true', {
+      headers: { 'User-Agent': 'CareerMatchAI/1.0' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d || []).flatMap(j => {
+      const searchText = `${j.title || ''} ${j.description || ''}`.toLowerCase();
+      const field = mapCategory(searchText);
+      if (!field) return [];
+
+      return [{
+        id: `github-jobs-${j.id}`,
+        title: j.title || '',
+        company: j.company || '',
+        location: j.location || 'Remote',
+        type: 'Full-time',
+        field,
+        description: stripHtml(j.description || '').slice(0, 700),
+        requirements: [],
+        niceToHave: [],
+        salary: 'Competitive',
+        remote: true,
+        postedDaysAgo: daysSince(j.created_at),
+        isLive: true,
+        applyUrl: j.url || '',
+        source: 'GitHub Jobs',
+      }];
+    });
+  } catch (e) {
+    console.warn('[Jobs] GitHub Jobs failed:', e.message);
+    return [];
+  }
+}
+
+async function fetchAngelList() {
+  try {
+    // AngelList startup jobs API
+    const r = await fetch('https://api.angel.co/1/jobs?page=1&per_page=50', {
+      headers: { 'User-Agent': 'CareerMatchAI/1.0' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d.jobs || []).flatMap(j => {
+      if (!j.title) return [];
+      const searchText = `${j.title || ''} ${(j.tags || []).join(' ')}`.toLowerCase();
+      if (!searchText.includes('engineer') && !searchText.includes('developer') && !searchText.includes('devops') &&
+          !searchText.includes('data') && !searchText.includes('tech')) return [];
+
+      const field = mapCategory(searchText);
+      if (!field) return [];
+
+      return [{
+        id: `angellist-${j.id}`,
+        title: j.title || '',
+        company: j.startup?.name || 'Startup',
+        location: j.startup?.city_name || 'Remote',
+        type: 'Full-time',
+        field,
+        description: j.description?.slice(0, 700) || j.title,
+        requirements: (j.tags || []).slice(0, 10),
+        niceToHave: [],
+        salary: j.salary_range || 'Competitive',
+        remote: j.remote,
+        postedDaysAgo: daysSince(j.created_at),
+        isLive: true,
+        applyUrl: j.angellist_url || '',
+        source: 'AngelList',
+      }];
+    });
+  } catch (e) {
+    console.warn('[Jobs] AngelList failed:', e.message);
+    return [];
+  }
+}
+
+async function fetchStackOverflow() {
+  try {
+    // Stack Overflow Jobs API (free tier, limited)
+    const r = await fetch('https://api.stackexchange.com/2.3/jobs?site=stackoverflow&tagged=javascript;python;java&sort=newest&order=desc', {
+      headers: { 'User-Agent': 'CareerMatchAI/1.0' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d.items || []).flatMap(j => {
+      const field = mapCategory(j.tags?.join(' ') || j.title || '');
+      if (!field) return [];
+
+      return [{
+        id: `stackoverflow-${j.job_id}`,
+        title: j.title || '',
+        company: j.company_name || '',
+        location: j.location || 'Remote',
+        type: 'Full-time',
+        field,
+        description: stripHtml(j.summary || '').slice(0, 700),
+        requirements: (j.tags || []).slice(0, 10),
+        niceToHave: [],
+        salary: 'Competitive',
+        remote: j.is_remote,
+        postedDaysAgo: daysSince(j.creation_date ? new Date(j.creation_date * 1000).toISOString() : undefined),
+        isLive: true,
+        applyUrl: j.apply_url || '',
+        source: 'Stack Overflow',
+      }];
+    });
+  } catch (e) {
+    console.warn('[Jobs] Stack Overflow failed:', e.message);
+    return [];
+  }
+}
+
 // ─── Cache & Auto-refresh ──────────────────────────────────────────────────────
 
 let liveJobsCache = [];
 let lastFetched = null;
 
 async function refreshLiveJobs() {
-  console.log('[Jobs] Fetching live jobs from APIs…');
-  const [remotive, arbeitnow, remoteok, justjoinit, weworkremotely] = await Promise.all([
+  console.log('[Jobs] Fetching live jobs from 8 APIs…');
+  const [remotive, arbeitnow, remoteok, justjoinit, weworkremotely, github, angellist, stackoverflow] = await Promise.all([
     fetchRemotive(),
     fetchArbeitnow(),
     fetchRemoteOK(),
     fetchJustJoinIT(),
-    fetchWeWorkRemotely()
+    fetchWeWorkRemotely(),
+    fetchGitHubJobs(),
+    fetchAngelList(),
+    fetchStackOverflow()
   ]);
 
   // Deduplicate by id
   const seen = new Set();
-  const merged = [...remotive, ...arbeitnow, ...remoteok, ...justjoinit, ...weworkremotely].filter(j => {
+  const merged = [...remotive, ...arbeitnow, ...remoteok, ...justjoinit, ...weworkremotely, ...github, ...angellist, ...stackoverflow].filter(j => {
     if (seen.has(j.id)) return false;
     seen.add(j.id);
     return true;
@@ -414,7 +534,7 @@ async function refreshLiveJobs() {
   liveJobsCache = merged;
   lastFetched = new Date().toISOString();
 
-  console.log(`[Jobs] ✓ ${liveJobsCache.length} live jobs (${remotive.length} Remotive, ${arbeitnow.length} Arbeitnow, ${remoteok.length} RemoteOK, ${justjoinit.length} JustJoinIT, ${weworkremotely.length} WeWorkRemotely)`);
+  console.log(`[Jobs] ✓ ${liveJobsCache.length} live jobs (Remotive:${remotive.length} Arbeitnow:${arbeitnow.length} RemoteOK:${remoteok.length} JustJoinIT:${justjoinit.length} WeWorkRemotely:${weworkremotely.length} GitHub:${github.length} AngelList:${angellist.length} StackOverflow:${stackoverflow.length})`);
 
   try {
     writeFileSync(CACHE_FILE, JSON.stringify({ jobs: liveJobsCache, lastFetched }, null, 2));
