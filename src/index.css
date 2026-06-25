@@ -22,7 +22,8 @@
            hover:from-indigo-700 hover:to-violet-700
            text-white shadow-lg shadow-indigo-500/25
            hover:shadow-xl hover:shadow-indigo-500/35
-           transition-all duration-200 active:scale-[0.98];
+           transition-all duration-200 active:scale-[0.98]
+           min-h-[44px] min-w-[44px] sm:min-h-[40px] sm:min-w-[40px];
   }
   .glass {
     background: rgba(255, 255, 255, 0.72);
@@ -71,3 +72,58 @@
 .prose-interview li { font-size: 0.8125rem; color: #475569; line-height: 1.6; padding-left: 1.25rem; position: relative; }
 .prose-interview li::before { content: '▸'; position: absolute; left: 0; color: #6366f1; font-size: 0.7rem; top: 0.2rem; }
 .prose-interview strong { color: #1e293b; font-weight: 600; }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .input-field {
+    @apply px-3 py-3 text-base;
+  }
+  button, a, [role="button"] {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  .prose-interview h3 {
+    font-size: 0.875rem;
+  }
+}
+
+/* Smooth animations */
+@keyframes shimmer {
+  0% { background-position: -400% center; }
+  100% { background-position: 400% center; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+
+@keyframes float-delay {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.6s ease-out;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delay {
+  animation: float-delay 7s ease-in-out infinite 1s;
+}
+
+.animate-float-slow {
+  animation: float-slow 8s ease-in-out infinite 2s;
+}

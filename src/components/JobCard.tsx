@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, Clock, Wifi, Loader2, Sparkles, Navigation, TrendingUp, ExternalLink } from 'lucide-react';
+import { MapPin, Clock, Wifi, Loader2, Sparkles, Navigation, TrendingUp, ExternalLink, Heart } from 'lucide-react';
 import { Job, MatchResult } from '../types';
 import { scoreColor, scoreLabel, scoreBg, scoreGlow } from './MatchRing';
 import { formatDistance } from '../utils/distance';
@@ -12,8 +12,10 @@ interface Props {
   analyzeError?: string;
   userCity?: string;
   distanceMiles?: number;
+  isSaved?: boolean;
   onAnalyze: () => void;
   onClick: () => void;
+  onSave?: () => void;
 }
 
 const TYPE_STYLES: Record<string, string> = {
@@ -212,7 +214,7 @@ function avatarGrad(company: string) {
   return AVATAR_GRADIENTS[(company.charCodeAt(0) + company.charCodeAt(company.length - 1)) % AVATAR_GRADIENTS.length];
 }
 
-export default function JobCard({ job, match, analyzing, analyzeError, userCity, distanceMiles, onAnalyze, onClick }: Props) {
+export default function JobCard({ job, match, analyzing, analyzeError, userCity, distanceMiles, isSaved, onAnalyze, onSave, onClick }: Props) {
   const [mapOpen, setMapOpen] = useState(false);
 
   return (
@@ -348,7 +350,7 @@ export default function JobCard({ job, match, analyzing, analyzeError, userCity,
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* ── CTA row: Analyze + Apply ── */}
+        {/* ── CTA row: Analyze + Apply + Save ── */}
         <div className="flex gap-2">
           <button
             onClick={e => { e.stopPropagation(); if (!match && !analyzing) onAnalyze(); }}
@@ -378,6 +380,20 @@ export default function JobCard({ job, match, analyzing, analyzeError, userCity,
           >
             Apply <ExternalLink className="w-3 h-3" />
           </a>
+
+          {onSave && (
+            <button
+              onClick={e => { e.stopPropagation(); onSave(); }}
+              className={`p-2.5 rounded-xl transition-all duration-200 flex-shrink-0 ${
+                isSaved
+                  ? 'bg-rose-100 text-rose-600 hover:bg-rose-200'
+                  : 'border border-slate-200 text-slate-400 hover:border-rose-300 hover:text-rose-600 hover:bg-rose-50'
+              }`}
+              title={isSaved ? 'Remove from favorites' : 'Save to favorites'}
+            >
+              <Heart className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+            </button>
+          )}
         </div>
       </div>
     </div>
