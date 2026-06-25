@@ -60,11 +60,35 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiting
-const limiterGeneral = rateLimit({ windowMs: 60 * 1000, max: 1000, message: 'Too many requests, please try again later.' });
-const limiterLLM = rateLimit({ windowMs: 60 * 1000, max: 1000, message: 'Rate limit exceeded.' });
-const limiterRefresh = rateLimit({ windowMs: 60 * 1000, max: 1000, message: 'Rate limit exceeded.' });
-const limiterGeocode = rateLimit({ windowMs: 60 * 1000, max: 1000, message: 'Rate limit exceeded.' });
+// Rate limiting with per-IP tracking and differentiated limits
+const limiterGeneral = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,  // General API: 100 req/min
+  message: 'Too many requests, please try again later.',
+  keyGenerator: (req) => req.ip || 'unknown',
+  skip: (req) => req.method === 'GET' && req.path === '/api/health',  // Skip health checks
+});
+
+const limiterLLM = rateLimit({
+  windowMs: 60 * 1000,
+  max: 8,  // LLM calls: 8 req/min per IP (expensive operations)
+  message: 'Analysis rate limit reached. Please wait a moment.',
+  keyGenerator: (req) => req.ip || 'unknown',
+});
+
+const limiterJobRefresh = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3,  // Job refresh: 3 req/min per IP (protects job board APIs)
+  message: 'Job refresh too frequent. Try again later.',
+  keyGenerator: (req) => req.ip || 'unknown',
+});
+
+const limiterGeocode = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,  // Geocoding: 30 req/min (moderate usage)
+  message: 'Too many geocode requests.',
+  keyGenerator: (req) => req.ip || 'unknown',
+});
 
 app.use(limiterGeneral);  // Apply to all routes by default
 
@@ -476,8 +500,8 @@ app.get('/api/jobs/live', (_req, res) => {
   res.json({ jobs: liveJobsCache, lastFetched, count: liveJobsCache.length });
 });
 
-// Force-refresh live jobs (handy for testing)
-app.post('/api/jobs/refresh', limiterRefresh, async (_req, res) => {
+// Force-refresh live jobs (rate-limited to protect job board APIs)
+app.post('/api/jobs/refresh', limiterJobRefresh, async (_req, res) => {
   await refreshLiveJobs();
   res.json({ count: liveJobsCache.length, lastFetched });
 });
@@ -567,19 +591,26 @@ app.post('/api/interview', limiterLLM, async (req, res) => {
     });
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
-        res.write(`data: ${JSON.stringify({ text: chunk.choices[0].delta.content })}\n\n`);
+        try {
+          res.write(`data: ${JSON.stringify({ text: chunk.choices[0].delta.content })}\n\n`);
+        } catch (writeErr) {
+          console.error('[API] Stream write error:', writeErr?.message);
+          break;
+        }
       }
     }
     res.write('data: [DONE]\n\n');
   } catch (e) {
     if (e instanceof z.ZodError) {
       res.write(`data: ${JSON.stringify({ error: 'Invalid request format' })}\n\n`);
+    } else if (e?.message?.includes('rate')) {
+      res.write(`data: ${JSON.stringify({ error: 'Rate limited. Please wait a moment.' })}\n\n`);
     } else {
       console.error('[API] Interview error:', e?.message);
       res.write(`data: ${JSON.stringify({ error: 'Interview prep generation failed' })}\n\n`);
     }
   } finally {
-    res.end();
+    try { res.end(); } catch (e) { console.error('[API] Error closing response:', e?.message); }
   }
 });
 
@@ -603,19 +634,26 @@ app.post('/api/tailor-resume', limiterLLM, async (req, res) => {
     });
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
-        res.write(`data: ${JSON.stringify({ text: chunk.choices[0].delta.content })}\n\n`);
+        try {
+          res.write(`data: ${JSON.stringify({ text: chunk.choices[0].delta.content })}\n\n`);
+        } catch (writeErr) {
+          console.error('[API] Stream write error:', writeErr?.message);
+          break;
+        }
       }
     }
     res.write('data: [DONE]\n\n');
   } catch (e) {
     if (e instanceof z.ZodError) {
       res.write(`data: ${JSON.stringify({ error: 'Invalid request format' })}\n\n`);
+    } else if (e?.message?.includes('rate')) {
+      res.write(`data: ${JSON.stringify({ error: 'Rate limited. Please wait a moment.' })}\n\n`);
     } else {
       console.error('[API] Tailor-resume error:', e?.message);
       res.write(`data: ${JSON.stringify({ error: 'Resume tailoring failed' })}\n\n`);
     }
   } finally {
-    res.end();
+    try { res.end(); } catch (e) { console.error('[API] Error closing response:', e?.message); }
   }
 });
 

@@ -89,9 +89,20 @@ function ProgressBar({ label, value }: { label: string; value: number }) {
   );
 }
 
-// Markdown-to-HTML renderer for bold headers and lists
+// Escape HTML to prevent XSS
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Markdown-to-HTML renderer for bold headers and lists (XSS-safe)
 function renderMarkdown(text: string): string {
-  const bold = (s: string) => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  const boldify = (s: string): string => {
+    // Replace **text** with <strong>text</strong> while escaping content
+    return s.replace(/\*\*(.+?)\*\*/g, (_, content) => `<strong>${escapeHtml(content)}</strong>`);
+  };
+
   const lines = text.split('\n');
   const out: string[] = [];
   let inList = false;
@@ -106,20 +117,20 @@ function renderMarkdown(text: string): string {
 
     if (line.startsWith('### ') || line.startsWith('## ') || line.startsWith('# ')) {
       if (inList) { out.push('</ul>'); inList = false; }
-      const content = bold(line.replace(/^#+\s+/, ''));
-      out.push(`<h3>${content}</h3>`);
+      const plainText = line.replace(/^#+\s+/, '');
+      out.push(`<h3>${boldify(plainText)}</h3>`);
       continue;
     }
 
     const listMatch = line.match(/^(?:[-•*]|\d+\.)\s+(.*)/);
     if (listMatch) {
       if (!inList) { out.push('<ul>'); inList = true; }
-      out.push(`<li>${bold(listMatch[1])}</li>`);
+      out.push(`<li>${boldify(listMatch[1])}</li>`);
       continue;
     }
 
     if (inList) { out.push('</ul>'); inList = false; }
-    out.push(`<p>${bold(line.trim())}</p>`);
+    out.push(`<p>${boldify(line.trim())}</p>`);
   }
 
   if (inList) out.push('</ul>');

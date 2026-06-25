@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { UserProfile } from './types';
 import Setup from './components/Setup';
 import JobBoard from './components/JobBoard';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const STORAGE_KEY = 'careermatch_profile';
 
@@ -33,15 +34,17 @@ export default function App() {
     setProfile(null);
   }
 
-  if (!profile) {
-    return <Setup onComplete={handleSetupComplete} />;
-  }
-
   return (
-    <JobBoard
-      profile={profile}
-      onLogout={handleLogout}
-      onProfileUpdate={setProfile}
-    />
+    <ErrorBoundary>
+      {!profile ? (
+        <Setup onComplete={handleSetupComplete} />
+      ) : (
+        <JobBoard
+          profile={profile}
+          onLogout={handleLogout}
+          onProfileUpdate={setProfile}
+        />
+      )}
+    </ErrorBoundary>
   );
 }

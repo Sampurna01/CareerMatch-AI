@@ -224,9 +224,15 @@ Be specific and practical. Tailor advice to this exact role and candidate backgr
       if (payload === '[DONE]') return;
       try {
         const json = JSON.parse(payload);
-        if (json.text) yield json.text;
         if (json.error) throw new Error(json.error);
-      } catch { /* skip malformed lines */ }
+        if (json.text) yield json.text;
+      } catch (e) {
+        if (e instanceof Error) {
+          throw e;  // Re-throw actual errors (not malformed JSON)
+        }
+        console.warn('[Stream] Malformed chunk:', line);
+        // Skip truly malformed lines
+      }
     }
   }
 }
