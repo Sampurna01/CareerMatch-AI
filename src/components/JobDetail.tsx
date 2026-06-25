@@ -18,6 +18,7 @@ import {
 import { Job, UserProfile, MatchResult } from '../types';
 import { analyzeMatch, streamInterviewPrep, streamTailorResume } from '../services/claude';
 import { scoreColor, scoreLabel } from './MatchRing';
+import MatchRadar from './MatchRadar';
 
 interface Props {
   job: Job;
@@ -335,14 +336,8 @@ export default function JobDetail({ job, profile, existingMatch, onBack }: Props
               <p className="relative text-sm text-white/70 flex-1 leading-relaxed">{match.assessment}</p>
             </div>
 
-            {/* Breakdown bars */}
-            <div className="space-y-3 mb-5">
-              <ProgressBar label="Skills Match (40%)" value={match.breakdown.skillsMatch} />
-              <ProgressBar label="Experience Match (25%)" value={match.breakdown.experienceMatch} />
-              <ProgressBar label="Seniority Match (15%)" value={match.breakdown.seniorityMatch} />
-              <ProgressBar label="Education Match (12%)" value={match.breakdown.educationMatch} />
-              <ProgressBar label="Interests Match (8%)" value={match.breakdown.interestsMatch} />
-            </div>
+            {/* Match Radar Visualization */}
+            <MatchRadar match={match} />
 
             {/* Skills audit */}
             {(match.matchedRequiredSkills?.length > 0 || match.missingRequiredSkills?.length > 0 || match.matchedNiceToHave?.length > 0) && (

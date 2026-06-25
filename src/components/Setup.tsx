@@ -33,6 +33,14 @@ export default function Setup({ onComplete, editMode = false, onCancel }: Props)
   const [resumeName, setResumeName]   = useState('');
   const [parsingResume, setParsingResume] = useState(false);
 
+  // Validation tracking
+  const fields = { name, field, experience, education };
+  const completedFields = Object.values(fields).filter(f => f && f.trim()).length;
+  const progress = Math.round((completedFields / 4) * 100);
+  const skills = skillsRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const interests = interestsRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const isValid = name && field && experience && education;
+
   async function handleResumeFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -155,6 +163,24 @@ export default function Setup({ onComplete, editMode = false, onCancel }: Props)
             )}
           </div>
 
+          {/* Progress Bar */}
+          <div className="px-8 py-3 bg-slate-50 border-b border-slate-100">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex-1">
+                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-slate-600">{progress}%</span>
+            </div>
+            <p className="text-xs text-slate-500">
+              {completedFields} of 4 required fields completed
+            </p>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* 1. Full Name */}
             <div>
@@ -251,7 +277,14 @@ export default function Setup({ onComplete, editMode = false, onCancel }: Props)
 
             {/* 7. Key Skills */}
             <div>
-              <Label>🛠️ Key Skills <span className="normal-case font-normal text-slate-400">(comma-separated)</span></Label>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label>🛠️ Key Skills <span className="normal-case font-normal text-slate-400">(comma-separated)</span></Label>
+                {skills.length > 0 && (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">
+                    ✓ {skills.length} skill{skills.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
               <input value={skillsRaw} onChange={e => setSkillsRaw(e.target.value)}
                 placeholder="Python, React, MATLAB, Circuit Design…" className="input-field" />
               <p className="text-xs text-slate-400 mt-1">Technical skills you know well — helps us find better matches</p>
@@ -259,7 +292,14 @@ export default function Setup({ onComplete, editMode = false, onCancel }: Props)
 
             {/* 8. Career Interests */}
             <div>
-              <Label>🎯 Career Interests <span className="normal-case font-normal text-slate-400">(comma-separated)</span></Label>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label>🎯 Career Interests <span className="normal-case font-normal text-slate-400">(comma-separated)</span></Label>
+                {interests.length > 0 && (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                    ✓ {interests.length} interest{interests.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
               <input value={interestsRaw} onChange={e => setInterestsRaw(e.target.value)}
                 placeholder="AI/ML, Remote work, Startups, Embedded systems…" className="input-field" />
               <p className="text-xs text-slate-400 mt-1">What excites you about your next role? Used to find cultural fit</p>

@@ -25,6 +25,7 @@ export interface UserProfile {
   experience: string;
   education: string;
   resumeText?: string;
+  savedJobIds?: string[];
 }
 
 export interface MatchBreakdown {

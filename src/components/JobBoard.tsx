@@ -9,6 +9,7 @@ import { useJobAlerts } from '../hooks/useJobAlerts';
 import JobCard from './JobCard';
 import JobDetail from './JobDetail';
 import Setup from './Setup';
+import SkeletonJobCard from './SkeletonJobCard';
 
 interface Props {
   profile: UserProfile;
@@ -583,7 +584,11 @@ export default function JobBoard({ profile, onLogout, onProfileUpdate }: Props) 
         </div>
 
         {/* Job grid */}
-        {sorted.length === 0 ? (
+        {liveJobs.length === 0 && loadingLive ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => <SkeletonJobCard key={i} />)}
+          </div>
+        ) : sorted.length === 0 ? (
           <div className="text-center py-16 text-slate-400">
             <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="font-medium">No jobs match your filters</p>
